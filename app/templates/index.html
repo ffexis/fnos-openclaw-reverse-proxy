@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Openclaw Proxy - Token Management</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+.header { background: #1a1a2e; padding: 16px 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 18px; color: #7c8aff; }
+.status { font-size: 13px; color: #888; }
+.status.ok { color: #4caf50; }
+.container { max-width: 800px; margin: 24px auto; padding: 0 16px; }
+.card { background: #1a1a2e; border-radius: 8px; padding: 20px; margin-bottom: 16px; border: 1px solid #2a2a4a; }
+.card h2 { font-size: 15px; color: #9aa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.token-list { list-style: none; }
+.token-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2a2a3a; }
+.token-item:last-child { border-bottom: none; }
+.token-name { font-weight: 600; color: #7c8aff; }
+.token-value { font-family: monospace; font-size: 13px; color: #666; margin-left: 12px; }
+.token-actions { display: flex; gap: 8px; }
+.btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; transition: opacity 0.2s; }
+.btn:hover { opacity: 0.8; }
+.btn-show { background: #333; color: #aaa; }
+.btn-danger { background: #5c2020; color: #ff6b6b; }
+.btn-primary { background: #2a4a6b; color: #7cb8ff; }
+.add-form { display: flex; gap: 8px; margin-top: 12px; }
+.add-form input { flex: 1; padding: 8px 12px; border: 1px solid #333; border-radius: 4px; background: #0f0f0f; color: #e0e0e0; font-size: 14px; }
+.add-form input:focus { outline: none; border-color: #7c8aff; }
+.empty { color: #555; text-align: center; padding: 20px; font-style: italic; }
+.toast { position: fixed; bottom: 24px; right: 24px; background: #2a4a6b; color: #7cb8ff; padding: 10px 20px; border-radius: 6px; font-size: 14px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px; }
+.info-label { color: #666; }
+.info-value { color: #ccc; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Openclaw Proxy</h1>
+  <div class="status" id="status">Loading...</div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <h2>API Endpoint</h2>
+    <div class="info-grid">
+      <span class="info-label">Chat Completions</span>
+      <span class="info-value" id="endpoint-url">/v1/chat/completions</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Upstream</h2>
+    <div class="info-grid" id="upstream-info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Access Tokens</h2>
+    <ul class="token-list" id="token-list"></ul>
+    <div class="add-form">
+      <input type="text" id="new-name" placeholder="Token name">
+      <button class="btn btn-primary" onclick="createToken()">Add Token</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const AUTH = 'Bearer ' + (localStorage.getItem('proxy_token') || '');
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Authorization': AUTH, 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+async function loadHealth() {
+  try {
+    const res = await fetch('/health');
+    const data = await res.json();
+    document.getElementById('status').textContent = 'Connected';
+    document.getElementById('status').className = 'status ok';
+    document.getElementById('endpoint-url').textContent = location.origin + '/v1/chat/completions';
+    document.getElementById('upstream-info').innerHTML = `
+      <span class="info-label">Port</span><span class="info-value">${data.upstream_port}</span>
+      <span class="info-label">Healthy</span><span class="info-value">${data.upstream_healthy ? 'Yes' : 'No'}</span>
+      <span class="info-label">Tokens</span><span class="info-value">${data.tokens_count}</span>
+    `;
+  } catch(e) {
+    document.getElementById('status').textContent = 'Disconnected';
+  }
+}
+
+async function loadTokens() {
+  const data = await api('GET', '/api/tokens');
+  const list = document.getElementById('token-list');
+  if (!data.tokens || Object.keys(data.tokens).length === 0) {
+    list.innerHTML = '<div class="empty">No tokens. Create one below.</div>';
+    return;
+  }
+  list.innerHTML = Object.entries(data.tokens).map(([name, val]) => `
+    <li class="token-item">
+      <div style="flex:1;min-width:0">
+        <span class="token-name">${name}</span>
+        <span class="token-value" id="tv-${name}">${val}</span>
+      </div>
+      <div class="token-actions">
+        <button class="btn btn-danger" onclick="deleteToken('${name}')">Delete</button>
+      </div>
+    </li>
+  `).join('');
+}
+
+async function createToken() {
+  const name = document.getElementById('new-name').value.trim();
+  if (!name) return;
+  const data = await api('POST', '/api/tokens', { name });
+  if (data.error) { toast(data.error); return; }
+  document.getElementById('new-name').value = '';
+  toast('Token created');
+  loadTokens();
+  loadHealth();
+}
+
+async function deleteToken(name) {
+  if (!confirm('Delete token "' + name + '"?')) return;
+  await api('DELETE', '/api/tokens/' + encodeURIComponent(name));
+  toast('Token deleted');
+  loadTokens();
+  loadHealth();
+}
+
+// Initial auth setup
+if (!localStorage.getItem('proxy_token')) {
+  const token = prompt('Enter your proxy access token:');
+  if (token) localStorage.setItem('proxy_token', token);
+  location.reload();
+}
+
+loadHealth();
+loadTokens();
+setInterval(loadHealth, 30000);
+</script>
+</body>
+</html>

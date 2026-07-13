@@ -1,0 +1,17 @@
+services:
+  openclaw-proxy:
+    build: .
+    container_name: openclaw-proxy
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /vol1/@apphome/trim.openclaw/data/home/.openclaw/openclaw.json:/config/openclaw.json:ro
+      - openclaw-proxy-data:/data
+    environment:
+      - TZ=Asia/Shanghai
+      - OPENCLAW_CONFIG=/config/openclaw.json
+      - TOKENS_PATH=/data/tokens.json
+      - CONFIG_POLL_INTERVAL=30
+
+volumes:
+  openclaw-proxy-data:
