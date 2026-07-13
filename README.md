@@ -246,6 +246,13 @@ volumes:
 
 ---
 
+## Contributors / 贡献者
+
+- **Google Gemini** - 架构规划协力 / Architecture planning
+- **MiMo Code** - 代码实现、部署与调试 / Implementation, deployment & debugging
+
+---
+
 ## License / 许可证
 
 MIT
