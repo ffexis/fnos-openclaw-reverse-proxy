@@ -3,47 +3,258 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Openclaw Proxy - Token Management</title>
+<title>Openclaw Proxy - Control Panel</title>
 <style>
+:root {
+  --bg-main: #0b0d12;
+  --bg-card: #151b26;
+  --bg-input: #0e1117;
+  --border-color: #242f41;
+  --border-hover: #3b82f6;
+  
+  --text-primary: #f3f4f6;
+  --text-secondary: #8e9aa8;
+  --text-muted: #4b5563;
+  
+  --brand-color: #3b82f6;
+  --brand-glow: rgba(59, 130, 246, 0.15);
+  --success: #10b981;
+  --success-glow: rgba(16, 185, 129, 0.2);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.1);
+  --primary-bg: rgba(59, 130, 246, 0.1);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
-.header { background: #1a1a2e; padding: 16px 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
-.header h1 { font-size: 18px; color: #7c8aff; }
-.status { font-size: 13px; color: #888; }
-.status.ok { color: #4caf50; }
-.container { max-width: 800px; margin: 24px auto; padding: 0 16px; }
-.card { background: #1a1a2e; border-radius: 8px; padding: 20px; margin-bottom: 16px; border: 1px solid #2a2a4a; }
-.card h2 { font-size: 15px; color: #9aa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
-.token-list { list-style: none; }
-.token-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2a2a3a; }
-.token-item:last-child { border-bottom: none; }
-.token-name { font-weight: 600; color: #7c8aff; }
-.token-value { font-family: monospace; font-size: 13px; color: #666; margin-left: 12px; }
-.token-actions { display: flex; gap: 8px; }
-.btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; transition: opacity 0.2s; }
-.btn:hover { opacity: 0.8; }
-.btn-show { background: #333; color: #aaa; }
-.btn-danger { background: #5c2020; color: #ff6b6b; }
-.btn-primary { background: #2a4a6b; color: #7cb8ff; }
-.btn-sm { padding: 4px 8px; font-size: 12px; }
-.add-form { display: flex; gap: 8px; margin-top: 12px; }
-.add-form input { flex: 1; padding: 8px 12px; border: 1px solid #333; border-radius: 4px; background: #0f0f0f; color: #e0e0e0; font-size: 14px; }
-.add-form input:focus { outline: none; border-color: #7c8aff; }
-.empty { color: #555; text-align: center; padding: 20px; font-style: italic; }
-.toast { position: fixed; bottom: 24px; right: 24px; background: #2a4a6b; color: #7cb8ff; padding: 10px 20px; border-radius: 6px; font-size: 14px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-.toast.show { opacity: 1; }
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px; }
-.info-label { color: #666; }
-.info-value { color: #ccc; font-family: monospace; word-break: break-all; }
-.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #2a2a3a; }
-.toggle-row:last-child { border-bottom: none; }
-.toggle-label { font-size: 14px; color: #ccc; }
-.toggle { position: relative; width: 44px; height: 24px; }
+body { 
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+  background: var(--bg-main); 
+  color: var(--text-primary); 
+  min-height: 100vh;
+  letter-spacing: -0.01em;
+}
+
+.header { 
+  background: var(--bg-card); 
+  padding: 16px 32px; 
+  border-bottom: 1px solid var(--border-color); 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+}
+.header h1 { 
+  font-size: 16px; 
+  font-weight: 700; 
+  color: var(--text-primary); 
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.header h1::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--brand-color);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--brand-color);
+}
+
+.status { 
+  font-size: 12px; 
+  font-weight: 600;
+  color: var(--text-secondary); 
+  background: var(--bg-input);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status.ok { 
+  color: var(--success); 
+  border-color: rgba(16, 185, 129, 0.3);
+  background: var(--success-glow);
+}
+.status.ok::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--success);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.container { 
+  max-width: 1200px; 
+  margin: 32px auto; 
+  padding: 0 24px; 
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 868px) {
+  .container {
+    grid-template-columns: 1fr 1fr;
+  }
+  .full-width {
+    grid-column: span 2;
+  }
+}
+
+.card { 
+  background: var(--bg-card); 
+  border-radius: 12px; 
+  padding: 24px; 
+  border: 1px solid var(--border-color); 
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+.card h2 { 
+  font-size: 12px; 
+  font-weight: 700;
+  color: var(--text-secondary); 
+  margin-bottom: 20px; 
+  text-transform: uppercase; 
+  letter-spacing: 0.08em; 
+}
+
+.info-grid { 
+  display: grid; 
+  grid-template-columns: auto 1fr; 
+  row-gap: 14px; 
+  column-gap: 24px;
+  font-size: 14px; 
+  align-items: center;
+}
+.info-label { color: var(--text-secondary); }
+.info-value { 
+  color: var(--text-primary); 
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; 
+  word-break: break-all; 
+  text-align: right;
+}
+
+.toggle-row { 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+}
+.toggle-label { font-size: 14px; color: var(--text-primary); }
+.toggle { position: relative; width: 40px; height: 22px; }
 .toggle input { opacity: 0; width: 0; height: 0; }
-.toggle-slider { position: absolute; inset: 0; background: #333; border-radius: 12px; cursor: pointer; transition: 0.2s; }
-.toggle-slider:before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #888; border-radius: 50%; transition: 0.2s; }
-.toggle input:checked + .toggle-slider { background: #2a4a6b; }
-.toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: #7cb8ff; }
+.toggle-slider { 
+  position: absolute; inset: 0; 
+  background: #2a3344; 
+  border-radius: 100px; 
+  cursor: pointer; 
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+.toggle-slider:before { 
+  content: ''; position: absolute; 
+  height: 16px; width: 16px; left: 3px; bottom: 3px; 
+  background: var(--text-secondary); 
+  border-radius: 50%; 
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+.toggle input:checked + .toggle-slider { background: var(--brand-color); }
+.toggle input:checked + .toggle-slider:before { 
+  transform: translateX(18px); 
+  background: var(--text-primary); 
+  box-shadow: 0 0 8px rgba(255,255,255,0.3);
+}
+
+.token-list { list-style: none; }
+.token-item { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  padding: 12px 0; 
+  border-bottom: 1px solid rgba(36, 47, 65, 0.5); 
+}
+.token-item:last-child { border-bottom: none; }
+.token-name { font-weight: 600; color: var(--text-primary); font-size: 14px; }
+.token-value { 
+  font-family: ui-monospace, monospace; 
+  font-size: 13px; 
+  color: var(--text-secondary); 
+  background: var(--bg-main);
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-left: 12px; 
+  border: 1px solid rgba(36, 47, 65, 0.3);
+}
+
+.add-form { display: flex; gap: 12px; margin-top: auto; padding-top: 20px;}
+.add-form input { 
+  flex: 1; padding: 10px 14px; 
+  border: 1px solid var(--border-color); 
+  border-radius: 8px; 
+  background: var(--bg-input); 
+  color: var(--text-primary); 
+  font-size: 14px; 
+  transition: all 0.2s;
+}
+.add-form input:focus { 
+  outline: none; 
+  border-color: var(--border-hover); 
+  box-shadow: 0 0 0 3px var(--brand-glow);
+}
+
+.btn { 
+  padding: 8px 16px; 
+  border: 1px solid transparent; 
+  border-radius: 8px; 
+  cursor: pointer; 
+  font-size: 13px; 
+  font-weight: 600;
+  transition: all 0.2s; 
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn:hover { transform: translateY(-1px); opacity: 0.95; }
+.btn:active { transform: translateY(0); }
+
+.btn-primary { background: var(--brand-color); color: white; }
+.btn-primary:hover { box-shadow: 0 0 12px rgba(59, 130, 246, 0.4); }
+.btn-danger { background: var(--danger-bg); color: var(--danger); border-color: rgba(239, 68, 68, 0.2); }
+.btn-danger:hover { background: var(--danger); color: white; }
+
+.btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px;}
+th { font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+tr:hover td { background: rgba(36, 47, 65, 0.2); }
+td { transition: background 0.2s; }
+
+.empty { color: var(--text-muted); text-align: center; padding: 32px; font-style: italic; font-size: 14px; }
+
+.toast { 
+  position: fixed; bottom: 32px; right: 32px; 
+  background: #1e293b; 
+  color: var(--text-primary); 
+  padding: 12px 24px; 
+  border-radius: 8px; 
+  font-size: 14px; 
+  font-weight: 500;
+  opacity: 0; 
+  transform: translateY(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+  pointer-events: none; 
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+.toast.show { opacity: 1; transform: translateY(0); }
 </style>
 </head>
 <body>
@@ -54,51 +265,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 </div>
 
 <div class="container">
-  <div class="card">
-    <h2>API Endpoint</h2>
-    <div class="info-grid">
-      <span class="info-label">Chat Completions</span>
-      <span class="info-value" id="endpoint-url">/v1/chat/completions</span>
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <div class="card">
+      <h2>API Endpoint</h2>
+      <div class="info-grid">
+        <span class="info-label">Chat Completions</span>
+        <span class="info-value" id="endpoint-url">/v1/chat/completions</span>
+      </div>
     </div>
-  </div>
 
-  <div class="card">
-    <h2>Upstream</h2>
-    <div class="info-grid" id="upstream-info"></div>
-  </div>
-
-  <div class="card">
-    <h2>Settings</h2>
-    <div class="toggle-row">
-      <span class="toggle-label">IPv6 Listening</span>
-      <label class="toggle">
-        <input type="checkbox" id="ipv6-toggle" onchange="toggleIPv6(this.checked)">
-        <span class="toggle-slider"></span>
-      </label>
+    <div class="card">
+      <h2>Upstream</h2>
+      <div class="info-grid" id="upstream-info"></div>
     </div>
-  </div>
 
-  <div class="card">
-    <h2>Audit Stats</h2>
-    <div id="audit-info" style="font-size:14px;color:#666;margin-bottom:8px">Loading...</div>
-    <table id="audit-table" style="width:100%;border-collapse:collapse;display:none">
-      <thead><tr style="border-bottom:1px solid #2a2a3a;text-align:left">
-        <th style="padding:8px 0;color:#7c8aff">Token</th>
-        <th style="padding:8px 0;color:#7c8aff;text-align:right">Today</th>
-        <th style="padding:8px 0;color:#7c8aff;text-align:right">Total</th>
-        <th style="padding:8px 0;color:#7c8aff"></th>
-      </tr></thead>
-      <tbody id="audit-body"></tbody>
-    </table>
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="toggle-row">
+        <span class="toggle-label">IPv6 Listening</span>
+        <label class="toggle">
+          <input type="checkbox" id="ipv6-toggle" onchange="toggleIPv6(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
   </div>
 
   <div class="card">
     <h2>Access Tokens</h2>
-    <ul class="token-list" id="token-list"></ul>
+    <ul class="token-list" id="token-list" style="flex: 1; overflow-y: auto; max-height: 320px; margin-bottom: 12px;"></ul>
     <div class="add-form">
       <input type="text" id="new-name" placeholder="Token name">
       <button class="btn btn-primary" onclick="createToken()">Add Token</button>
     </div>
+  </div>
+
+  <div class="card full-width">
+    <h2>Audit Stats</h2>
+    <div id="audit-info" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px; background: var(--bg-main); padding: 8px 12px; border-radius: 6px; display: inline-block; border: 1px solid rgba(36,47,65,0.3);">Loading...</div>
+    <table id="audit-table" style="width:100%; display:none;">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border-color); text-align:left;">
+          <th style="padding:12px 8px; color:var(--text-secondary)">Token</th>
+          <th style="padding:12px 8px; color:var(--text-secondary); text-align:right">Today</th>
+          <th style="padding:12px 8px; color:var(--text-secondary); text-align:right">Total</th>
+          <th style="padding:12px 8px; color:var(--text-secondary)"></th>
+        </tr>
+      </thead>
+      <tbody id="audit-body"></tbody>
+    </table>
   </div>
 </div>
 
@@ -130,13 +345,14 @@ async function loadHealth() {
     document.getElementById('endpoint-url').textContent = location.origin + '/v1/chat/completions';
     document.getElementById('upstream-info').innerHTML = `
       <span class="info-label">Port</span><span class="info-value">${data.upstream_port}</span>
-      <span class="info-label">Healthy</span><span class="info-value">${data.upstream_healthy ? 'Yes' : 'No'}</span>
+      <span class="info-label">Healthy</span><span class="info-value" style="color: ${data.upstream_healthy ? 'var(--success)' : 'var(--danger)'}">${data.upstream_healthy ? 'Yes' : 'No'}</span>
       <span class="info-label">Tokens</span><span class="info-value">${data.tokens_count}</span>
-      <span class="info-label">Config</span><span class="info-value">${data.openclaw_config}</span>
+      <span class="info-label">Config</span><span class="info-value" style="font-size:12px;">${data.openclaw_config}</span>
     `;
     document.getElementById('ipv6-toggle').checked = data.ipv6_enabled;
   } catch(e) {
     document.getElementById('status').textContent = 'Disconnected';
+    document.getElementById('status').className = 'status';
   }
 }
 
@@ -149,17 +365,17 @@ async function loadTokens() {
   const data = await api('GET', '/api/tokens');
   const list = document.getElementById('token-list');
   if (!data.tokens || Object.keys(data.tokens).length === 0) {
-    list.innerHTML = '<div class="empty">No tokens. Create one below.</div>';
+    list.innerHTML = '<div class="empty">No tokens yet.</div>';
     return;
   }
   list.innerHTML = Object.entries(data.tokens).map(([name, val]) => `
     <li class="token-item">
-      <div style="flex:1;min-width:0">
+      <div style="flex:1; min-width:0;">
         <span class="token-name">${name}</span>
         <span class="token-value" id="tv-${name}">${val}</span>
       </div>
       <div class="token-actions">
-        ${name === 'admin' ? '' : '<button class="btn btn-danger" onclick="deleteToken(\'' + name + '\')">Delete</button>'}
+        ${name === 'admin' ? '' : '<button class="btn btn-danger btn-sm" onclick="deleteToken(\'' + name + '\')">Delete</button>'}
       </div>
     </li>
   `).join('');
@@ -199,13 +415,15 @@ async function loadAudit() {
     info.textContent = 'Retention: ' + data.retention_days + ' days';
     table.style.display = 'table';
     body.innerHTML = entries.map(([name, s]) => `
-      <tr style="border-bottom:1px solid #1a1a2a">
-        <td style="padding:8px 0;font-weight:600;color:#7c8aff">${name}</td>
-        <td style="padding:8px 0;text-align:right;color:#ccc">${s.daily}</td>
-        <td style="padding:8px 0;text-align:right;color:#ccc">${s.total}</td>
-        <td style="padding:8px 0;text-align:right;display:flex;gap:4px;justify-content:flex-end">
-          <button class="btn btn-primary btn-sm" onclick="downloadAudit('${name}')">Download</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteAudit('${name}')">Delete</button>
+      <tr style="border-bottom:1px solid rgba(36,47,65,0.4)">
+        <td style="padding:14px 8px; font-weight:600; color:var(--brand-color)">${name}</td>
+        <td style="padding:14px 8px; text-align:right; font-family:monospace; color:var(--text-primary)">${s.daily}</td>
+        <td style="padding:14px 8px; text-align:right; font-family:monospace; color:var(--text-secondary)">${s.total}</td>
+        <td style="padding:14px 8px; text-align:right;">
+          <div style="display:inline-flex; gap:8px;">
+            <button class="btn btn-primary btn-sm" onclick="downloadAudit('${name}')">Download</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteAudit('${name}')">Delete</button>
+          </div>
         </td>
       </tr>
     `).join('');
@@ -233,7 +451,6 @@ async function deleteAudit(name) {
   loadAudit();
 }
 
-// Initial auth setup
 if (!localStorage.getItem('proxy_token')) {
   const token = prompt('Enter your proxy access token:');
   if (token) localStorage.setItem('proxy_token', token);
