@@ -136,12 +136,13 @@ body {
   font-size: 14px; 
   align-items: center;
 }
-.info-label { color: var(--text-secondary); }
+.info-label { color: var(--text-secondary); white-space: nowrap; }
 .info-value { 
   color: var(--text-primary); 
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; 
   word-break: break-all; 
   text-align: right;
+  min-width: 0;
 }
 
 .toggle-row { 
@@ -185,13 +186,17 @@ body {
 .token-name { font-weight: 600; color: var(--text-primary); font-size: 14px; }
 .token-value { 
   font-family: ui-monospace, monospace; 
-  font-size: 13px; 
+  font-size: 12px; 
   color: var(--text-secondary); 
   background: var(--bg-main);
   padding: 4px 8px;
   border-radius: 6px;
   margin-left: 12px; 
   border: 1px solid rgba(36, 47, 65, 0.3);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .add-form { display: flex; gap: 12px; margin-top: auto; padding-top: 20px;}
@@ -291,9 +296,9 @@ td { transition: background 0.2s; }
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" style="display: flex; flex-direction: column;">
     <h2>Access Tokens</h2>
-    <ul class="token-list" id="token-list" style="flex: 1; overflow-y: auto; max-height: 320px; margin-bottom: 12px;"></ul>
+    <ul class="token-list" id="token-list" style="flex: 1; overflow-y: auto; min-height: 120px; margin-bottom: 12px;"></ul>
     <div class="add-form">
       <input type="text" id="new-name" placeholder="Token name">
       <button class="btn btn-primary" onclick="createToken()">Add Token</button>
@@ -302,7 +307,7 @@ td { transition: background 0.2s; }
 
   <div class="card full-width">
     <h2>Audit Stats</h2>
-    <div id="audit-info" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px; background: var(--bg-main); padding: 8px 12px; border-radius: 6px; display: inline-block; border: 1px solid rgba(36,47,65,0.3);">Loading...</div>
+    <div id="audit-info" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px; background: var(--bg-main); padding: 8px 12px; border-radius: 6px; display: inline-block; width: fit-content; border: 1px solid rgba(36,47,65,0.3);">Loading...</div>
     <table id="audit-table" style="width:100%; display:none;">
       <thead>
         <tr style="border-bottom:2px solid var(--border-color); text-align:left;">
