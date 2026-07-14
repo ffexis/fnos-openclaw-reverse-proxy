@@ -56,6 +56,8 @@ class TokenStore:
             return token
 
     def remove(self, name: str) -> bool:
+        if name == "admin":
+            return False
         with self._lock:
             if name in self._tokens:
                 del self._tokens[name]

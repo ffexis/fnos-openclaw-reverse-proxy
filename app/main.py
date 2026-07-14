@@ -98,6 +98,8 @@ async def get_token(name: str, _: str = __import__("fastapi").Depends(require_au
 
 @app.delete("/api/tokens/{name}")
 async def delete_token(name: str, _: str = __import__("fastapi").Depends(require_auth)):
+    if name == "admin":
+        return JSONResponse({"error": "cannot delete admin token"}, status_code=403)
     if store.remove(name):
         return {"deleted": name}
     return JSONResponse({"error": "token not found"}, status_code=404)
