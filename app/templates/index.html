@@ -159,7 +159,7 @@ async function loadTokens() {
         <span class="token-value" id="tv-${name}">${val}</span>
       </div>
       <div class="token-actions">
-        <button class="btn btn-danger" onclick="deleteToken('${name}')">Delete</button>
+        ${name === 'admin' ? '' : '<button class="btn btn-danger" onclick="deleteToken(\'' + name + '\')">Delete</button>'}
       </div>
     </li>
   `).join('');
