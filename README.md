@@ -6,7 +6,7 @@
 
 ## English
 
-A reverse proxy for OpenClaw gateway, exposing the Chat Completions API to your local network with access control and session management.
+A reverse proxy for OpenClaw gateway, exposing the Chat Completions API to your local network with access control, session management, and audit logging.
 
 ### Why?
 
@@ -15,22 +15,26 @@ OpenClaw's gateway is locked to loopback mode on certain NAS systems (e.g., FeiN
 - Exposing the API on a configurable port with Bearer token authentication
 - Auto-forwarding the upstream auth token (read from `openclaw.json`)
 - Managing session keys per token to isolate conversations
-- Providing a Web UI for token management
+- Stripping and injecting system prompts for user identification
+- Providing audit logging of all requests and responses
+- Providing a Web UI for token management and audit stats
 
 ### Features
 
 - **Token-based access control** - Create/delete tokens via Web UI or API
 - **Session isolation** - Each token maintains a session key; new conversations (`messages.length == 1`) auto-rotate to prevent context pollution
+- **System prompt control** - Strips all incoming system prompts; injects `用户名：<token_name>` for new conversations
+- **Audit logging** - JSONL logs by date and token name; SSE responses parsed to human-readable text
 - **Config polling** - Auto-detects changes to `openclaw.json` (port/token)
 - **SSE streaming** - Full support for streaming chat completions
-- **Web UI** - Dark-themed management interface
+- **Web UI** - Dark-themed management interface with audit stats
 
 ### Quick Start
 
 #### Docker (Recommended)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fnos-openclaw-reverse-proxy.git
+git clone https://github.com/ffexis/fnos-openclaw-reverse-proxy.git
 cd fnos-openclaw-reverse-proxy
 
 # Edit docker-compose.yml to mount your openclaw.json
@@ -51,6 +55,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 41000
 | `OPENCLAW_CONFIG` | `/config/openclaw.json` | Path to OpenClaw config file |
 | `TOKENS_PATH` | `/data/tokens.json` | Path to token storage |
 | `CONFIG_POLL_INTERVAL` | `30` | Config file poll interval (seconds) |
+| `AUDIT_DIR` | `/data/audit` | Audit log storage directory |
+| `AUDIT_RETENTION_DAYS` | `30` | Audit log retention period (days) |
 
 ### Usage
 
@@ -91,6 +97,21 @@ curl -X DELETE http://<host>:41000/api/tokens/<name> \
   -H "Authorization: Bearer <admin-token>"
 ```
 
+#### Audit API
+
+```bash
+# Get stats (daily/total per user)
+curl http://<host>:41000/api/audit/stats -H "Authorization: Bearer <admin-token>"
+
+# Download logs for a user (today)
+curl http://<host>:41000/api/audit/<name>/download \
+  -H "Authorization: Bearer <admin-token>" -O
+
+# Download logs for a specific date
+curl "http://<host>:41000/api/audit/<name>/download?date=2026-07-14" \
+  -H "Authorization: Bearer <admin-token>" -O
+```
+
 ### Architecture
 
 ```
@@ -98,8 +119,10 @@ Client (with proxy token)
     ↓ Authorization: Bearer <proxy_token>
 Reverse Proxy (port 41000)
     ↓ Validates proxy token
+    ↓ Strips system prompts, injects username for new conversations
     ↓ Reads upstream token from openclaw.json
     ↓ Adds x-openclaw-session-key header
+    ↓ Logs request/response to JSONL
     ↓ Authorization: Bearer <openclaw_token>
 OpenClaw Gateway (127.0.0.1:11149)
 ```
@@ -118,6 +141,7 @@ services:
       - openclaw-proxy-data:/data
     environment:
       - TZ=Asia/Shanghai
+      - AUDIT_RETENTION_DAYS=30
 
 volumes:
   openclaw-proxy-data:
@@ -127,7 +151,7 @@ volumes:
 
 ## 中文
 
-OpenClaw 网关的反向代理，将 Chat Completions API 暴露到局域网，支持访问控制和会话管理。
+OpenClaw 网关的反向代理，将 Chat Completions API 暴露到局域网，支持访问控制、会话管理和审计日志。
 
 ### 为什么需要这个？
 
@@ -136,22 +160,26 @@ OpenClaw 的网关在某些 NAS 系统（如飞牛OS）上被锁定为 loopback 
 - 在可配置端口上暴露 API，使用 Bearer Token 认证
 - 自动转发上游认证 Token（从 `openclaw.json` 读取）
 - 为每个访问 Token 管理会话密钥，隔离不同对话
-- 提供 Web UI 管理界面
+- 过滤和注入系统提示词，用于用户标识
+- 记录所有请求和响应的审计日志
+- 提供 Web UI 管理界面和审计统计
 
 ### 功能特性
 
 - **基于 Token 的访问控制** - 通过 Web UI 或 API 创建/删除 Token
 - **会话隔离** - 每个 Token 维护一个会话密钥；新对话（`messages.length == 1`）自动轮换，防止上下文污染
+- **系统提示词控制** - 过滤所有传入的系统提示词；新对话注入 `用户名：<token_name>`
+- **审计日志** - 按日期和 Token 名称记录 JSONL 日志；SSE 响应解析为人类可读文本
 - **配置轮询** - 自动检测 `openclaw.json` 变更（端口/Token）
 - **SSE 流式传输** - 完整支持流式 Chat Completions
-- **Web UI** - 深色主题管理界面
+- **Web UI** - 深色主题管理界面，显示审计统计
 
 ### 快速开始
 
 #### Docker（推荐）
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fnos-openclaw-reverse-proxy.git
+git clone https://github.com/ffexis/fnos-openclaw-reverse-proxy.git
 cd fnos-openclaw-reverse-proxy
 
 # 编辑 docker-compose.yml，挂载你的 openclaw.json
@@ -172,6 +200,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 41000
 | `OPENCLAW_CONFIG` | `/config/openclaw.json` | OpenClaw 配置文件路径 |
 | `TOKENS_PATH` | `/data/tokens.json` | Token 存储路径 |
 | `CONFIG_POLL_INTERVAL` | `30` | 配置文件轮询间隔（秒） |
+| `AUDIT_DIR` | `/data/audit` | 审计日志存储目录 |
+| `AUDIT_RETENTION_DAYS` | `30` | 审计日志保留天数 |
 
 ### 使用方法
 
@@ -212,6 +242,21 @@ curl -X DELETE http://<主机>:41000/api/tokens/<name> \
   -H "Authorization: Bearer <管理员token>"
 ```
 
+#### 审计 API
+
+```bash
+# 获取统计（每日/总计）
+curl http://<主机>:41000/api/audit/stats -H "Authorization: Bearer <管理员token>"
+
+# 下载用户日志（当天）
+curl http://<主机>:41000/api/audit/<name>/download \
+  -H "Authorization: Bearer <管理员token>" -O
+
+# 下载指定日期的日志
+curl "http://<主机>:41000/api/audit/<name>/download?date=2026-07-14" \
+  -H "Authorization: Bearer <管理员token>" -O
+```
+
 ### 架构
 
 ```
@@ -219,8 +264,10 @@ curl -X DELETE http://<主机>:41000/api/tokens/<name> \
     ↓ Authorization: Bearer <proxy_token>
 反向代理（端口 41000）
     ↓ 验证代理 Token
+    ↓ 过滤系统提示词，新对话注入用户名
     ↓ 从 openclaw.json 读取上游 Token
     ↓ 添加 x-openclaw-session-key 请求头
+    ↓ 记录请求/响应到 JSONL
     ↓ Authorization: Bearer <openclaw_token>
 OpenClaw 网关（127.0.0.1:11149）
 ```
@@ -239,6 +286,7 @@ services:
       - openclaw-proxy-data:/data
     environment:
       - TZ=Asia/Shanghai
+      - AUDIT_RETENTION_DAYS=30
 
 volumes:
   openclaw-proxy-data:
