@@ -137,7 +137,7 @@ services:
     restart: unless-stopped
     network_mode: host  # Required to reach OpenClaw on localhost
     volumes:
-      - /path/to/openclaw.json:/config/openclaw.json:ro
+      - /path/to/openclaw.json:/config/openclaw.json:ro  # IMPORTANT: mount your actual openclaw.json
       - openclaw-proxy-data:/data
     environment:
       - TZ=Asia/Shanghai
@@ -146,6 +146,8 @@ services:
 volumes:
   openclaw-proxy-data:
 ```
+
+> **Important**: The volume mount `/path/to/openclaw.json:/config/openclaw.json:ro` is the core configuration. You MUST mount your actual OpenClaw config file for the proxy to work. On FeiNiuOS, this is typically `/vol1/@apphome/trim.openclaw/data/home/.openclaw/openclaw.json`.
 
 ---
 
@@ -282,7 +284,7 @@ services:
     restart: unless-stopped
     network_mode: host  # 必须使用 host 网络以访问本机的 OpenClaw
     volumes:
-      - /path/to/openclaw.json:/config/openclaw.json:ro
+      - /path/to/openclaw.json:/config/openclaw.json:ro  # 重要：挂载你的实际 openclaw.json
       - openclaw-proxy-data:/data
     environment:
       - TZ=Asia/Shanghai
@@ -291,6 +293,8 @@ services:
 volumes:
   openclaw-proxy-data:
 ```
+
+> **重要**：`/path/to/openclaw.json:/config/openclaw.json:ro` 是核心配置。你必须挂载实际的 OpenClaw 配置文件，代理才能正常工作。在飞牛OS上，通常是 `/vol1/@apphome/trim.openclaw/data/home/.openclaw/openclaw.json`。
 
 ---
 

@@ -25,6 +25,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .btn-show { background: #333; color: #aaa; }
 .btn-danger { background: #5c2020; color: #ff6b6b; }
 .btn-primary { background: #2a4a6b; color: #7cb8ff; }
+.btn-sm { padding: 4px 8px; font-size: 12px; }
 .add-form { display: flex; gap: 8px; margin-top: 12px; }
 .add-form input { flex: 1; padding: 8px 12px; border: 1px solid #333; border-radius: 4px; background: #0f0f0f; color: #e0e0e0; font-size: 14px; }
 .add-form input:focus { outline: none; border-color: #7c8aff; }
@@ -33,7 +34,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .toast.show { opacity: 1; }
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px; }
 .info-label { color: #666; }
-.info-value { color: #ccc; font-family: monospace; }
+.info-value { color: #ccc; font-family: monospace; word-break: break-all; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #2a2a3a; }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-label { font-size: 14px; color: #ccc; }
+.toggle { position: relative; width: 44px; height: 24px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: #333; border-radius: 12px; cursor: pointer; transition: 0.2s; }
+.toggle-slider:before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #888; border-radius: 50%; transition: 0.2s; }
+.toggle input:checked + .toggle-slider { background: #2a4a6b; }
+.toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: #7cb8ff; }
 </style>
 </head>
 <body>
@@ -55,6 +65,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="card">
     <h2>Upstream</h2>
     <div class="info-grid" id="upstream-info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Settings</h2>
+    <div class="toggle-row">
+      <span class="toggle-label">IPv6 Listening</span>
+      <label class="toggle">
+        <input type="checkbox" id="ipv6-toggle" onchange="toggleIPv6(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
   </div>
 
   <div class="card">
@@ -111,10 +132,17 @@ async function loadHealth() {
       <span class="info-label">Port</span><span class="info-value">${data.upstream_port}</span>
       <span class="info-label">Healthy</span><span class="info-value">${data.upstream_healthy ? 'Yes' : 'No'}</span>
       <span class="info-label">Tokens</span><span class="info-value">${data.tokens_count}</span>
+      <span class="info-label">Config</span><span class="info-value">${data.openclaw_config}</span>
     `;
+    document.getElementById('ipv6-toggle').checked = data.ipv6_enabled;
   } catch(e) {
     document.getElementById('status').textContent = 'Disconnected';
   }
+}
+
+async function toggleIPv6(enabled) {
+  await api('POST', '/api/ipv6', { enabled });
+  toast('IPv6 ' + (enabled ? 'enabled' : 'disabled'));
 }
 
 async function loadTokens() {
@@ -175,8 +203,9 @@ async function loadAudit() {
         <td style="padding:8px 0;font-weight:600;color:#7c8aff">${name}</td>
         <td style="padding:8px 0;text-align:right;color:#ccc">${s.daily}</td>
         <td style="padding:8px 0;text-align:right;color:#ccc">${s.total}</td>
-        <td style="padding:8px 0;text-align:right">
-          <button class="btn btn-primary" onclick="downloadAudit('${name}')">Download</button>
+        <td style="padding:8px 0;text-align:right;display:flex;gap:4px;justify-content:flex-end">
+          <button class="btn btn-primary btn-sm" onclick="downloadAudit('${name}')">Download</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAudit('${name}')">Delete</button>
         </td>
       </tr>
     `).join('');
@@ -185,6 +214,13 @@ async function loadAudit() {
 
 async function downloadAudit(name) {
   window.open('/api/audit/' + encodeURIComponent(name) + '/download?token=' + encodeURIComponent(AUTH.replace('Bearer ', '')));
+}
+
+async function deleteAudit(name) {
+  if (!confirm('Delete ALL audit logs for "' + name + '"?')) return;
+  const data = await api('DELETE', '/api/audit/' + encodeURIComponent(name));
+  toast('Deleted ' + data.files_removed + ' log files');
+  loadAudit();
 }
 
 // Initial auth setup

@@ -116,3 +116,18 @@ class AuditLogger:
         with self._lock:
             self._save_stats()
             self._write_count = 0
+
+    def delete_user(self, token_name: str) -> int:
+        """Delete all audit logs for a user. Returns number of files deleted."""
+        deleted = 0
+        for d in self._dir.iterdir():
+            if d.is_dir() and d.name.isdigit() and len(d.name) == 8:
+                log_file = d / f"{token_name}.jsonl"
+                if log_file.exists():
+                    log_file.unlink()
+                    deleted += 1
+        with self._lock:
+            if token_name in self._counts:
+                del self._counts[token_name]
+                self._save_stats()
+        return deleted

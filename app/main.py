@@ -25,6 +25,9 @@ store = TokenStore()
 audit = AuditLogger()
 init_auth(config, store)
 
+# IPv6 state (in-memory, default off)
+_ipv6_enabled = False
+
 
 def _config_watcher():
     while True:
@@ -48,6 +51,8 @@ async def health():
         "upstream_port": config.port,
         "upstream_healthy": config.is_healthy,
         "tokens_count": len(store.list_all()),
+        "openclaw_config": config.config_path,
+        "ipv6_enabled": _ipv6_enabled,
     }
 
 
@@ -135,6 +140,20 @@ async def audit_download(name: str, date: str | None = None, _: str = __import__
         media_type="application/x-ndjson",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.delete("/api/audit/{name}")
+async def audit_delete(name: str, _: str = __import__("fastapi").Depends(require_auth)):
+    deleted = audit.delete_user(name)
+    return {"deleted": name, "files_removed": deleted}
+
+
+@app.post("/api/ipv6")
+async def toggle_ipv6(request: Request, _: str = __import__("fastapi").Depends(require_auth)):
+    global _ipv6_enabled
+    body = await request.json()
+    _ipv6_enabled = bool(body.get("enabled", False))
+    return {"ipv6_enabled": _ipv6_enabled}
 
 
 # --- Proxy ---

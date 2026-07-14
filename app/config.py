@@ -48,6 +48,10 @@ class OpenclawConfig:
     def is_healthy(self) -> bool:
         return self._token != "" and self._port > 0
 
+    @property
+    def config_path(self) -> str:
+        return str(self._path)
+
     def _poll(self):
         try:
             mtime = self._path.stat().st_mtime
