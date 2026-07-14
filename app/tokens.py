@@ -85,6 +85,14 @@ class TokenStore:
                     return new_key
         return "sess_" + secrets.token_hex(16)
 
+    def get_token_name(self, token_value: str) -> str:
+        """Get the name for a given token value."""
+        with self._lock:
+            for name, val in self._tokens.items():
+                if val == token_value:
+                    return name
+        return "unknown"
+
     def regenerate(self, name: str) -> str | None:
         with self._lock:
             if name in self._tokens:

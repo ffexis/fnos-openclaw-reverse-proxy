@@ -12,6 +12,8 @@ services:
       - OPENCLAW_CONFIG=/config/openclaw.json
       - TOKENS_PATH=/data/tokens.json
       - CONFIG_POLL_INTERVAL=30
+      - AUDIT_DIR=/data/audit
+      - AUDIT_RETENTION_DAYS=30
 
 volumes:
   openclaw-proxy-data:

@@ -58,6 +58,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   </div>
 
   <div class="card">
+    <h2>Audit Stats</h2>
+    <div id="audit-info" style="font-size:14px;color:#666;margin-bottom:8px">Loading...</div>
+    <table id="audit-table" style="width:100%;border-collapse:collapse;display:none">
+      <thead><tr style="border-bottom:1px solid #2a2a3a;text-align:left">
+        <th style="padding:8px 0;color:#7c8aff">Token</th>
+        <th style="padding:8px 0;color:#7c8aff;text-align:right">Today</th>
+        <th style="padding:8px 0;color:#7c8aff;text-align:right">Total</th>
+        <th style="padding:8px 0;color:#7c8aff"></th>
+      </tr></thead>
+      <tbody id="audit-body"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
     <h2>Access Tokens</h2>
     <ul class="token-list" id="token-list"></ul>
     <div class="add-form">
@@ -142,6 +156,37 @@ async function deleteToken(name) {
   loadHealth();
 }
 
+async function loadAudit() {
+  try {
+    const data = await api('GET', '/api/audit/stats');
+    const info = document.getElementById('audit-info');
+    const table = document.getElementById('audit-table');
+    const body = document.getElementById('audit-body');
+    const entries = Object.entries(data.stats || {});
+    if (entries.length === 0) {
+      info.textContent = 'No audit data yet. Retention: ' + data.retention_days + ' days.';
+      table.style.display = 'none';
+      return;
+    }
+    info.textContent = 'Retention: ' + data.retention_days + ' days';
+    table.style.display = 'table';
+    body.innerHTML = entries.map(([name, s]) => `
+      <tr style="border-bottom:1px solid #1a1a2a">
+        <td style="padding:8px 0;font-weight:600;color:#7c8aff">${name}</td>
+        <td style="padding:8px 0;text-align:right;color:#ccc">${s.daily}</td>
+        <td style="padding:8px 0;text-align:right;color:#ccc">${s.total}</td>
+        <td style="padding:8px 0;text-align:right">
+          <button class="btn btn-primary" onclick="downloadAudit('${name}')">Download</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) {}
+}
+
+async function downloadAudit(name) {
+  window.open('/api/audit/' + encodeURIComponent(name) + '/download?token=' + encodeURIComponent(AUTH.replace('Bearer ', '')));
+}
+
 // Initial auth setup
 if (!localStorage.getItem('proxy_token')) {
   const token = prompt('Enter your proxy access token:');
@@ -151,7 +196,9 @@ if (!localStorage.getItem('proxy_token')) {
 
 loadHealth();
 loadTokens();
+loadAudit();
 setInterval(loadHealth, 30000);
+setInterval(loadAudit, 30000);
 </script>
 </body>
 </html>

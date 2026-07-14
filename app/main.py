@@ -1,10 +1,12 @@
 import logging
+import os
 import threading
 import time
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
+from .audit import AuditLogger
 from .auth import init_auth, require_auth
 from .config import OpenclawConfig, POLL_INTERVAL
 from .proxy import proxy_request
@@ -20,6 +22,7 @@ app = FastAPI(title="Openclaw Reverse Proxy", version="1.0.0")
 
 config = OpenclawConfig()
 store = TokenStore()
+audit = AuditLogger()
 init_auth(config, store)
 
 
@@ -31,6 +34,11 @@ def _config_watcher():
 
 _watcher = threading.Thread(target=_config_watcher, daemon=True)
 _watcher.start()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    audit.flush()
 
 
 @app.get("/health")
@@ -49,6 +57,9 @@ async def index():
 
     html_path = Path(__file__).parent / "templates" / "index.html"
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
+# --- Token Management ---
 
 
 @app.get("/api/tokens")
@@ -97,11 +108,43 @@ async def regenerate_token(
     return JSONResponse({"error": "token not found"}, status_code=404)
 
 
+# --- Audit ---
+
+
+@app.get("/api/audit/stats")
+async def audit_stats(_: str = __import__("fastapi").Depends(require_auth)):
+    stats = audit.get_stats()
+    retention = int(os.environ.get("AUDIT_RETENTION_DAYS", "30"))
+    return {"stats": stats, "retention_days": retention}
+
+
+@app.get("/api/audit/{name}/download")
+async def audit_download(name: str, date: str | None = None, _: str = __import__("fastapi").Depends(require_auth)):
+    log_path = audit.get_log_path(name, date)
+    if log_path is None:
+        return JSONResponse({"error": "no logs found"}, status_code=404)
+
+    def iter_file():
+        with open(log_path, "rb") as f:
+            while chunk := f.read(8192):
+                yield chunk
+
+    filename = f"{name}_{date or 'today'}.jsonl"
+    return StreamingResponse(
+        iter_file(),
+        media_type="application/x-ndjson",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# --- Proxy ---
+
+
 @app.api_route("/v1/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_v1(path: str, request: Request, proxy_token: str = __import__("fastapi").Depends(require_auth)):
-    return await proxy_request(request, config, store, f"v1/{path}", proxy_token)
+    return await proxy_request(request, config, store, audit, f"v1/{path}", proxy_token)
 
 
 @app.api_route("/app/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_control_ui(path: str, request: Request, proxy_token: str = __import__("fastapi").Depends(require_auth)):
-    return await proxy_request(request, config, store, f"app/{path}", proxy_token)
+    return await proxy_request(request, config, store, audit, f"app/{path}", proxy_token)
