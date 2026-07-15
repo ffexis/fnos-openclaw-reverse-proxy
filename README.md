@@ -132,7 +132,7 @@ Client (with proxy token)
     ↓ Authorization: Bearer <proxy_token>
 Reverse Proxy (port 41000)
     ↓ Validates proxy token
-    ↓ Strips system prompts, injects username for new conversations
+    ↓ Strips system prompts, injects identity tag into user messages
     ↓ Reads upstream token from openclaw.json
     ↓ Adds x-openclaw-session-key header
     ↓ Logs request/response to JSONL
@@ -292,7 +292,7 @@ curl "http://<主机>:41000/api/audit/<name>/download?date=2026-07-14" \
     ↓ Authorization: Bearer <proxy_token>
 反向代理（端口 41000）
     ↓ 验证代理 Token
-    ↓ 过滤系统提示词，新对话注入用户名
+    ↓ 过滤系统提示词，在用户消息中注入身份标签
     ↓ 从 openclaw.json 读取上游 Token
     ↓ 添加 x-openclaw-session-key 请求头
     ↓ 记录请求/响应到 JSONL
