@@ -350,7 +350,8 @@ async function loadHealth() {
     document.getElementById('endpoint-url').textContent = location.origin + '/v1/chat/completions';
     document.getElementById('upstream-info').innerHTML = `
       <span class="info-label">Port</span><span class="info-value">${data.upstream_port}</span>
-      <span class="info-label">Healthy</span><span class="info-value" style="color: ${data.upstream_healthy ? 'var(--success)' : 'var(--danger)'}">${data.upstream_healthy ? 'Yes' : 'No'}</span>
+      <span class="info-label">Config Valid</span><span class="info-value" style="color: ${data.upstream_healthy ? 'var(--success)' : 'var(--danger)'}">${data.upstream_healthy ? 'Yes' : 'No'}</span>
+      <span class="info-label">Gateway Alive</span><span class="info-value" style="color: ${data.upstream_alive ? 'var(--success)' : 'var(--danger)'}">${data.upstream_alive ? 'Online' : 'Offline'}</span>
       <span class="info-label">Tokens</span><span class="info-value">${data.tokens_count}</span>
       <span class="info-label">Config</span><span class="info-value" style="font-size:12px;">${data.openclaw_config}</span>
     `;

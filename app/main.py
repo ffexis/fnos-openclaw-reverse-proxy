@@ -2,6 +2,8 @@ import logging
 import os
 import threading
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
@@ -29,11 +31,50 @@ init_auth(config, store)
 # IPv6 state (in-memory, default off)
 _ipv6_enabled = False
 
+# Upstream gateway health state
+_upstream_alive = False
+_upstream_last_check: float = 0
+_upstream_lock = threading.Lock()
+
+HEALTH_CHECK_TIMEOUT = 5  # seconds
+
+
+def _check_upstream_health() -> bool:
+    """Poll upstream gateway /health endpoint."""
+    global _upstream_alive, _upstream_last_check
+    url = f"{config.upstream_url}/health"
+    alive = False
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=HEALTH_CHECK_TIMEOUT) as resp:
+            if resp.status == 200:
+                import json
+                data = json.loads(resp.read())
+                alive = data.get("ok", False)
+    except Exception:
+        alive = False
+
+    with _upstream_lock:
+        prev = _upstream_alive
+        _upstream_alive = alive
+        _upstream_last_check = time.time()
+
+    if prev != alive:
+        if alive:
+            logger.info("Upstream gateway is now healthy")
+        else:
+            logger.warning("Upstream gateway is unreachable or unhealthy")
+
+    return alive
+
 
 def _config_watcher():
+    # Initial health check
+    _check_upstream_health()
     while True:
         time.sleep(POLL_INTERVAL)
         config.refresh()
+        _check_upstream_health()
 
 
 _watcher = threading.Thread(target=_config_watcher, daemon=True)
@@ -51,6 +92,7 @@ async def health():
         "status": "ok",
         "upstream_port": config.port,
         "upstream_healthy": config.is_healthy,
+        "upstream_alive": _upstream_alive,
         "tokens_count": len(store.list_all()),
         "openclaw_config": config.config_path,
         "ipv6_enabled": _ipv6_enabled,
@@ -170,6 +212,7 @@ async def probe(proxy_token: str = __import__("fastapi").Depends(require_auth)):
         "status": "ok",
         "service": "openclaw-proxy",
         "user": token_name,
+        "upstream_alive": _upstream_alive,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -179,9 +222,19 @@ async def probe(proxy_token: str = __import__("fastapi").Depends(require_auth)):
 
 @app.api_route("/v1/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_v1(path: str, request: Request, proxy_token: str = __import__("fastapi").Depends(require_auth)):
+    if not _upstream_alive:
+        return JSONResponse(
+            {"error": "Upstream gateway unavailable", "detail": "OpenClaw gateway health check failed"},
+            status_code=502,
+        )
     return await proxy_request(request, config, store, audit, f"v1/{path}", proxy_token)
 
 
 @app.api_route("/app/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_control_ui(path: str, request: Request, proxy_token: str = __import__("fastapi").Depends(require_auth)):
+    if not _upstream_alive:
+        return JSONResponse(
+            {"error": "Upstream gateway unavailable", "detail": "OpenClaw gateway health check failed"},
+            status_code=502,
+        )
     return await proxy_request(request, config, store, audit, f"app/{path}", proxy_token)
