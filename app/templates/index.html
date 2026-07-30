@@ -343,7 +343,7 @@ async function api(method, path, body) {
 
 async function loadHealth() {
   try {
-    const res = await fetch('/health');
+    const res = await fetch('/health', { headers: { 'Authorization': AUTH } });
     const data = await res.json();
     document.getElementById('status').textContent = 'Connected';
     document.getElementById('status').className = 'status ok';

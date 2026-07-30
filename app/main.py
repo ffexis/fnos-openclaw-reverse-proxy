@@ -87,7 +87,7 @@ async def shutdown():
 
 
 @app.get("/health")
-async def health():
+async def health(_: str = __import__("fastapi").Depends(require_auth)):
     return {
         "status": "ok",
         "upstream_port": config.port,
