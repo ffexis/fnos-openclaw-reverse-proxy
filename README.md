@@ -26,8 +26,9 @@ OpenClaw's gateway is locked to loopback mode on certain NAS systems (e.g., FeiN
 - **System prompt control** - Strips all incoming system prompts; injects `用户名：<token_name>` for new conversations
 - **Audit logging** - JSONL logs by date and token name; SSE responses parsed to human-readable text
 - **Config polling** - Auto-detects changes to `openclaw.json` (port/token)
+- **Upstream health monitoring** - Periodically polls OpenClaw gateway `/health`; fast-fails with 502 when gateway is down
 - **SSE streaming** - Full support for streaming chat completions
-- **Availability probe** - `GET /v1/__probe` endpoint for clients to detect proxy availability (no forwarding, no audit)
+- **Availability probe** - `GET /v1/__probe` endpoint for clients to detect proxy and gateway availability (no forwarding, no audit)
 - **Web UI** - Dark-themed management interface with audit stats
 
 ### Quick Start
@@ -131,10 +132,10 @@ curl "http://<host>:41000/api/audit/<name>/download?date=2026-07-14" \
 ```bash
 # Check proxy availability (responds directly, no forwarding to OpenClaw)
 curl http://<host>:41000/v1/__probe -H "Authorization: Bearer <your-token>"
-# Response: {"status":"ok","service":"openclaw-proxy","user":"<token-name>","timestamp":"..."}
+# Response: {"status":"ok","service":"openclaw-proxy","user":"<token-name>","upstream_alive":true,"timestamp":"..."}
 ```
 
-This endpoint is designed for clients to detect whether the proxy is reachable and the token is valid, enabling fallback/degradation logic (e.g., switching to a public LLM when the proxy is unavailable). It responds in < 10ms and does not generate audit logs.
+This endpoint is designed for clients to detect whether the proxy is reachable, the token is valid, and whether the upstream OpenClaw gateway is healthy — enabling fallback/degradation logic (e.g., switching to a public LLM when unavailable). It responds in < 10ms and does not generate audit logs.
 
 ### Architecture
 
@@ -197,8 +198,9 @@ OpenClaw 的网关在某些 NAS 系统（如飞牛OS）上被锁定为 loopback 
 - **系统提示词控制** - 过滤所有传入的系统提示词；新对话注入 `用户名：<token_name>`
 - **审计日志** - 按日期和 Token 名称记录 JSONL 日志；SSE 响应解析为人类可读文本
 - **配置轮询** - 自动检测 `openclaw.json` 变更（端口/Token）
+- **上游健康监测** - 定期轮询 OpenClaw 网关 `/health`；网关不可用时快速返回 502
 - **SSE 流式传输** - 完整支持流式 Chat Completions
-- **可用性探测** - `GET /v1/__probe` 端点，供客户端检测代理可用性（不转发、不记审计）
+- **可用性探测** - `GET /v1/__probe` 端点，供客户端检测代理及网关可用性（不转发、不记审计）
 - **Web UI** - 深色主题管理界面，显示审计统计
 
 ### 快速开始
@@ -302,10 +304,10 @@ curl "http://<主机>:41000/api/audit/<name>/download?date=2026-07-14" \
 ```bash
 # 检测代理可用性（直接响应，不转发到 OpenClaw）
 curl http://<主机>:41000/v1/__probe -H "Authorization: Bearer <你的token>"
-# 响应: {"status":"ok","service":"openclaw-proxy","user":"<token名称>","timestamp":"..."}
+# 响应: {"status":"ok","service":"openclaw-proxy","user":"<token名称>","upstream_alive":true,"timestamp":"..."}
 ```
 
-此端点供客户端检测代理是否可达、Token 是否有效，用于实现降级/回退逻辑（例如代理不可用时切换到公网 LLM）。响应时间 < 10ms，不产生审计日志。
+此端点供客户端检测代理是否可达、Token 是否有效、上游 OpenClaw 网关是否健康，用于实现降级/回退逻辑（例如不可用时切换到公网 LLM）。响应时间 < 10ms，不产生审计日志。
 
 ### 架构
 
