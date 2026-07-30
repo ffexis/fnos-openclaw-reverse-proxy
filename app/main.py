@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -156,6 +157,21 @@ async def toggle_ipv6(request: Request, _: str = __import__("fastapi").Depends(r
     body = await request.json()
     _ipv6_enabled = bool(body.get("enabled", False))
     return {"ipv6_enabled": _ipv6_enabled}
+
+
+# --- Probe ---
+
+
+@app.get("/v1/__probe")
+async def probe(proxy_token: str = __import__("fastapi").Depends(require_auth)):
+    """轻量探测端点，供客户端检测反代可用性。不转发，不记审计。"""
+    token_name = store.get_token_name(proxy_token)
+    return {
+        "status": "ok",
+        "service": "openclaw-proxy",
+        "user": token_name,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # --- Proxy ---
