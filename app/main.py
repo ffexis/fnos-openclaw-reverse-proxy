@@ -6,14 +6,24 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from .audit import AuditLogger
-from .auth import init_auth, require_auth
+from .auth import (
+    UI_COOKIE_MAX_AGE,
+    UI_COOKIE_NAME,
+    build_ui_url,
+    init_auth,
+    is_admin_token,
+    issue_ui_cookie,
+    require_auth,
+    ui_has_access,
+)
 from .config import OpenclawConfig, POLL_INTERVAL
 from .proxy import proxy_request
 from .tokens import TokenStore
+from .ui_proxy import ui_proxy_request, ui_proxy_websocket
 
 logging.basicConfig(
     level=logging.INFO,
@@ -230,11 +240,75 @@ async def proxy_v1(path: str, request: Request, proxy_token: str = __import__("f
     return await proxy_request(request, config, store, audit, f"v1/{path}", proxy_token)
 
 
-@app.api_route("/app/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-async def proxy_control_ui(path: str, request: Request, proxy_token: str = __import__("fastapi").Depends(require_auth)):
+# --- Control UI reverse proxy (transparent) ---
+# These routes require the proxy's OWN admin token (via an admin-session
+# cookie handed out by /api/ui/login, or a Bearer admin token). This matches
+# the proxy control page's own access model: only the admin operator reaches
+# the OpenClaw console. The gateway then does its own device/session auth, and
+# the entry URL /api/ui/login auto-injects the gateway token for a single sign-on.
+# Registered before the generic /app catch-all so the basePath routes win.
+
+@app.post("/api/ui/login")
+async def ui_login(request: Request, proxy_token: str = Depends(require_auth)):
+    if not is_admin_token(proxy_token):
+        return JSONResponse(
+            {"error": "admin token required", "detail": "Only the admin token may open the OpenClaw console"},
+            status_code=403,
+        )
+    resp = JSONResponse({"ui_url": build_ui_url()})
+    resp.set_cookie(
+        key=UI_COOKIE_NAME,
+        value=issue_ui_cookie(proxy_token),
+        httponly=True,
+        max_age=UI_COOKIE_MAX_AGE,
+        path="/",
+        samesite="lax",
+    )
+    return resp
+
+
+@app.api_route("/app/trim-openclaw/default/{path:path}",
+               methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def proxy_ui_basepath(path: str, request: Request):
+    if not ui_has_access(request.headers, request.cookies):
+        return JSONResponse(
+            {"error": "proxy admin required", "detail": "Open the console from the proxy control panel (/api/ui/login)"},
+            status_code=401,
+        )
     if not _upstream_alive:
         return JSONResponse(
             {"error": "Upstream gateway unavailable", "detail": "OpenClaw gateway health check failed"},
             status_code=502,
         )
-    return await proxy_request(request, config, store, audit, f"app/{path}", proxy_token)
+    return await ui_proxy_request(request, config, "app/trim-openclaw/default/" + path)
+
+
+@app.api_route("/app/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def proxy_control_ui(path: str, request: Request):
+    if not ui_has_access(request.headers, request.cookies):
+        return JSONResponse(
+            {"error": "proxy admin required", "detail": "Open the console from the proxy control panel (/api/ui/login)"},
+            status_code=401,
+        )
+    if not _upstream_alive:
+        return JSONResponse(
+            {"error": "Upstream gateway unavailable", "detail": "OpenClaw gateway health check failed"},
+            status_code=502,
+        )
+    return await ui_proxy_request(request, config, "app/" + path)
+
+
+@app.websocket("/app/trim-openclaw/default/{path:path}")
+async def proxy_ui_basepath_ws(path: str, websocket: WebSocket):
+    if not ui_has_access(websocket.headers, websocket.cookies):
+        await websocket.close(code=1008, reason="proxy admin required")
+        return
+    await ui_proxy_websocket(websocket, config, "app/trim-openclaw/default/" + path)
+
+
+@app.websocket("/app/{path:path}")
+async def proxy_control_ui_ws(path: str, websocket: WebSocket):
+    if not ui_has_access(websocket.headers, websocket.cookies):
+        await websocket.close(code=1008, reason="proxy admin required")
+        return
+    await ui_proxy_websocket(websocket, config, "app/" + path)

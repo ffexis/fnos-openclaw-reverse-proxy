@@ -272,6 +272,15 @@ td { transition: background 0.2s; }
 <div class="container">
   <div style="display: flex; flex-direction: column; gap: 24px;">
     <div class="card">
+      <h2>OpenClaw Console</h2>
+      <p style="font-size:13px; color:var(--text-secondary); margin-bottom:16px; line-height:1.5;">
+        Open the OpenClaw web console. The gateway key is auto-injected, so you
+        land straight in. Requires the <b>admin</b> token.
+      </p>
+      <button class="btn btn-primary" onclick="openConsole()" style="align-self:flex-start;">Open OpenClaw Console</button>
+    </div>
+
+    <div class="card">
       <h2>API Endpoint</h2>
       <div class="info-grid">
         <span class="info-label">Chat Completions</span>
@@ -339,6 +348,21 @@ async function api(method, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   return res.json();
+}
+
+async function openConsole() {
+  const res = await fetch('/api/ui/login', { method: 'POST', headers: { 'Authorization': AUTH } });
+  if (res.status === 401 && !localStorage.getItem('proxy_token')) {
+    toast('Enter your proxy access token first');
+    return;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    toast(data.error || 'Console login failed (admin token required)');
+    return;
+  }
+  const data = await res.json();
+  location.assign(data.ui_url);
 }
 
 async function loadHealth() {
