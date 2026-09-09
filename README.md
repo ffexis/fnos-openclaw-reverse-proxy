@@ -30,6 +30,15 @@ OpenClaw's gateway is locked to loopback mode on certain NAS systems (e.g., FeiN
 - **SSE streaming** - Full support for streaming chat completions
 - **Availability probe** - `GET /v1/__probe` endpoint for clients to detect proxy and gateway availability (no forwarding, no audit)
 - **Web UI** - Dark-themed management interface with audit stats
+- **Control UI reverse proxy** - Transparent HTTP + WebSocket reverse proxy for the OpenClaw web console, gated behind the proxy's admin token with single sign-on
+
+### OpenClaw Control UI Reverse Proxy
+
+FeiNiuOS ships its own reverse proxy in front of the OpenClaw app. Every request that reaches OpenClaw through it gets `X-Forwarded-For` / `X-Real-IP` / `X-Forwarded-*` headers injected pointing to the loopback hop. OpenClaw's security layer then runs its **attribution check** (`gateway.proxyAttributionRequired`): a forwarded request whose client address is only a loopback IP is rejected with `403 proxy_attribution_required`.
+
+That behavior can't be switched off via configuration (the loopback restriction is hardcoded), so the clean fix is to not go through the official reverse proxy at all. This proxy exposes a **Control UI reverse proxy**: it connects straight to the gateway on `127.0.0.1:<port>` over the host network, forwards HTTP and WebSocket transparently, and strips all forwarding headers so OpenClaw sees a trusted bare loopback connection — passing the attribution check naturally.
+
+Access control mirrors the proxy's own control panel: only the **admin** token may open the OpenClaw console (`POST /api/ui/login` hands out a signed, HttpOnly session cookie), and the returned entry URL embeds the gateway token (`#token=...`) so the Control UI's SPA fills it in automatically — opening the console from the control panel is a single sign-on. Both the API and real-time WebSocket links are reverse-proxied uncensored (no header injection, no body rewriting).
 
 ### Quick Start
 
@@ -202,6 +211,15 @@ OpenClaw 的网关在某些 NAS 系统（如飞牛OS）上被锁定为 loopback 
 - **SSE 流式传输** - 完整支持流式 Chat Completions
 - **可用性探测** - `GET /v1/__probe` 端点，供客户端检测代理及网关可用性（不转发、不记审计）
 - **Web UI** - 深色主题管理界面，显示审计统计
+- **控制台反向代理** - 对 OpenClaw Web 控制台做透传 HTTP + WebSocket 反向代理，仅允许代理的管理员 Token 访问，并支持单点登录
+
+### OpenClaw 控制台反向代理
+
+飞牛OS 自带了 OpenClaw 应用的前置反向代理。通过它访问 OpenClaw 的每个请求都会被注入指向回环这一跳的 `X-Forwarded-For` / `X-Real-IP` / `X-Forwarded-*` 请求头，随后 OpenClaw 安全层会执行**归属检查**（`gateway.proxyAttributionRequired`）：若转发请求的客户端地址仅为回环 IP，就会被拒绝并返回 `403 proxy_attribution_required`。
+
+该行为无法通过配置关闭（回环限制是硬编码的），因此干净的解决办法是彻底绕开官方反向代理。本项目额外提供**控制台反向代理**：通过 host 网络直连网关的 `127.0.0.1:<port>`，透传 HTTP 与 WebSocket，并剥离所有转发请求头，让 OpenClaw 看到的是一条可信的、无代理痕迹的回环连接——自然通过归属检查。
+
+访问控制与本代理自身的控制面板一致：只有**管理员** Token 才能打开 OpenClaw 控制台（`POST /api/ui/login` 会签发带签名的 HttpOnly 会话 Cookie），返回的入口 URL 内嵌网关 Token（`#token=...`），控制台的 SPA 会自动填入——从控制面板打开控制台即为单点登录。API 与实时的 WebSocket 链路都被原样反代（不改请求头、不改写请求体）。
 
 ### 快速开始
 
@@ -352,6 +370,7 @@ volumes:
 
 - **Google Gemini** - 架构规划协力 / Architecture planning
 - **MiMo Code** - 代码实现、部署与调试 / Implementation, deployment & debugging
+- **TRAE AI** - 控制台反向代理设计、实现与运维 / Control UI reverse proxy design, implementation & operations
 
 ---
 
