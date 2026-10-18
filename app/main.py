@@ -7,7 +7,9 @@ import urllib.error
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Request, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+
+import httpx
 
 from .audit import AuditLogger
 from .auth import (
@@ -20,7 +22,7 @@ from .auth import (
     require_auth,
     ui_has_access,
 )
-from .config import OpenclawConfig, POLL_INTERVAL
+from .config import MAGPIE_URL, OpenclawConfig, POLL_INTERVAL
 from .proxy import proxy_request
 from .tokens import TokenStore
 from .ui_proxy import ui_proxy_request, ui_proxy_websocket
@@ -31,7 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Openclaw Reverse Proxy", version="1.3.0")
+app = FastAPI(title="Openclaw Reverse Proxy", version="1.4.0")
 
 config = OpenclawConfig()
 store = TokenStore()
@@ -209,6 +211,59 @@ async def toggle_ipv6(request: Request, _: str = __import__("fastapi").Depends(r
     body = await request.json()
     _ipv6_enabled = bool(body.get("enabled", False))
     return {"ipv6_enabled": _ipv6_enabled}
+
+
+# --- Magpie usage (read-only, proxied from MAGPIE_URL/v1/magpie/*) ---
+
+
+MAGPIE_TIMEOUT = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+
+
+async def _magpie_forward(path: str, request: Request) -> Response:
+    """Forward a read-only request to magpie's usage API and relay JSON as-is."""
+    url = f"{MAGPIE_URL}/v1/magpie/{path}"
+    query = str(request.url.query)
+    if query:
+        url = f"{url}?{query}"
+    try:
+        async with httpx.AsyncClient(timeout=MAGPIE_TIMEOUT) as client:
+            upstream = await client.get(url)
+    except httpx.TimeoutException:
+        return JSONResponse(
+            {"error": "magpie unavailable", "detail": f"timeout after 60s: {url}"},
+            status_code=502,
+        )
+    except httpx.HTTPError as e:
+        return JSONResponse(
+            {"error": "magpie unavailable", "detail": f"{type(e).__name__}: {e}"},
+            status_code=502,
+        )
+    content_type = upstream.headers.get("content-type", "application/json")
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=content_type,
+    )
+
+
+@app.get("/api/magpie/usage")
+async def magpie_usage(request: Request, _: str = __import__("fastapi").Depends(require_auth)):
+    return await _magpie_forward("usage", request)
+
+
+@app.get("/api/magpie/quotas")
+async def magpie_quotas(request: Request, _: str = __import__("fastapi").Depends(require_auth)):
+    return await _magpie_forward("quotas", request)
+
+
+@app.get("/api/magpie/usage/requests")
+async def magpie_usage_requests(request: Request, _: str = __import__("fastapi").Depends(require_auth)):
+    return await _magpie_forward("usage/requests", request)
+
+
+@app.get("/api/magpie/quotas/history")
+async def magpie_quotas_history(request: Request, _: str = __import__("fastapi").Depends(require_auth)):
+    return await _magpie_forward("quotas/history", request)
 
 
 # --- Probe ---

@@ -31,6 +31,7 @@ OpenClaw's gateway is locked to loopback mode on certain NAS systems (e.g., FeiN
 - **Availability probe** - `GET /v1/__probe` endpoint for clients to detect proxy and gateway availability (no forwarding, no audit)
 - **Web UI** - Dark-themed management interface with audit stats
 - **Control UI reverse proxy** - Transparent HTTP + WebSocket reverse proxy for the OpenClaw web console, gated behind the proxy's admin token with single sign-on
+- **Magpie usage dashboard** - Header tabs (`Proxy | Magpie`); the Magpie tab shows the magpie gateway's quota windows, 30-day usage summary and recent request log, proxied read-only via `/api/magpie/*`
 
 ### OpenClaw Control UI Reverse Proxy
 
@@ -68,6 +69,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 41000
 | `CONFIG_POLL_INTERVAL` | `30` | Config file poll interval (seconds) |
 | `AUDIT_DIR` | `/data/audit` | Audit log storage directory |
 | `AUDIT_RETENTION_DAYS` | `30` | Audit log retention period (days) |
+| `MAGPIE_URL` | `http://127.0.0.1:3425` | Base URL of the magpie gateway usage API (used by the Magpie tab) |
 
 ### Multi-User Security
 
@@ -86,7 +88,7 @@ The proxy sends the token name to OpenClaw as the user identity. The `admin` tok
 
 #### Web UI
 
-Open `http://<your-host>:41000/` in browser. Enter your proxy token when prompted.
+Open `http://<your-host>:41000/` in browser. Enter your proxy token when prompted. The header has two tabs: **Proxy** (default — the control panel) and **Magpie** (gateway usage/quota dashboard).
 
 #### API
 
@@ -146,6 +148,26 @@ curl http://<host>:41000/v1/__probe -H "Authorization: Bearer <your-token>"
 
 This endpoint is designed for clients to detect whether the proxy is reachable, the token is valid, and whether the upstream OpenClaw gateway is healthy — enabling fallback/degradation logic (e.g., switching to a public LLM when unavailable). It responds in < 10ms and does not generate audit logs.
 
+#### Magpie Usage API
+
+Read-only proxy to the magpie gateway's `/v1/magpie/*` usage API (all routes require authentication, same as other `/api/*` endpoints; query params are passed through):
+
+```bash
+# 30-day usage aggregation (calls/errors/tokens/cost + daily series)
+curl http://<host>:41000/api/magpie/usage -H "Authorization: Bearer <admin-token>"
+
+# Provider quota windows (used/remaining/resetsAt per window)
+curl http://<host>:41000/api/magpie/quotas -H "Authorization: Bearer <admin-token>"
+
+# Recent request log (?limit is passed through)
+curl "http://<host>:41000/api/magpie/usage/requests?limit=50" -H "Authorization: Bearer <admin-token>"
+
+# Quota history
+curl http://<host>:41000/api/magpie/quotas/history -H "Authorization: Bearer <admin-token>"
+```
+
+If magpie is unreachable, these endpoints return `502` with `{"error": "magpie unavailable", "detail": ...}`; the Magpie tab then shows an inline error banner without affecting the Proxy tab.
+
 ### Architecture
 
 ```
@@ -176,6 +198,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - AUDIT_RETENTION_DAYS=30
+      - MAGPIE_URL=http://127.0.0.1:3425  # magpie gateway base URL (Magpie tab)
 
 volumes:
   openclaw-proxy-data:
@@ -212,6 +235,7 @@ OpenClaw 的网关在某些 NAS 系统（如飞牛OS）上被锁定为 loopback 
 - **可用性探测** - `GET /v1/__probe` 端点，供客户端检测代理及网关可用性（不转发、不记审计）
 - **Web UI** - 深色主题管理界面，显示审计统计
 - **控制台反向代理** - 对 OpenClaw Web 控制台做透传 HTTP + WebSocket 反向代理，仅允许代理的管理员 Token 访问，并支持单点登录
+- **Magpie 用量面板** - Header 标签页（`Proxy | Magpie`）；Magpie 标签展示 magpie 网关的配额窗口、30 天用量汇总与最近请求明细，经 `/api/magpie/*` 只读代理获取
 
 ### OpenClaw 控制台反向代理
 
@@ -249,6 +273,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 41000
 | `CONFIG_POLL_INTERVAL` | `30` | 配置文件轮询间隔（秒） |
 | `AUDIT_DIR` | `/data/audit` | 审计日志存储目录 |
 | `AUDIT_RETENTION_DAYS` | `30` | 审计日志保留天数 |
+| `MAGPIE_URL` | `http://127.0.0.1:3425` | magpie 网关用量 API 地址（Magpie 标签页使用） |
 
 ### 多用户安全配置
 
@@ -267,7 +292,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 41000
 
 #### Web UI
 
-浏览器打开 `http://<你的主机>:41000/`，按提示输入代理 Token。
+浏览器打开 `http://<你的主机>:41000/`，按提示输入代理 Token。Header 有两个标签页：**Proxy**（默认，控制面板）和 **Magpie**（网关用量/配额面板）。
 
 #### API 调用
 
@@ -327,6 +352,26 @@ curl http://<主机>:41000/v1/__probe -H "Authorization: Bearer <你的token>"
 
 此端点供客户端检测代理是否可达、Token 是否有效、上游 OpenClaw 网关是否健康，用于实现降级/回退逻辑（例如不可用时切换到公网 LLM）。响应时间 < 10ms，不产生审计日志。
 
+#### Magpie 用量 API
+
+对 magpie 网关 `/v1/magpie/*` 用量 API 的只读代理（所有路由与其他 `/api/*` 一样需要鉴权，查询参数原样透传）：
+
+```bash
+# 30 天用量汇总（calls/errors/tokens/cost + 逐日 series）
+curl http://<主机>:41000/api/magpie/usage -H "Authorization: Bearer <管理员token>"
+
+# 各 provider 配额窗口（每个窗口的 used/remaining/resetsAt）
+curl http://<主机>:41000/api/magpie/quotas -H "Authorization: Bearer <管理员token>"
+
+# 最近请求明细（?limit 透传）
+curl "http://<主机>:41000/api/magpie/usage/requests?limit=50" -H "Authorization: Bearer <管理员token>"
+
+# 配额历史
+curl http://<主机>:41000/api/magpie/quotas/history -H "Authorization: Bearer <管理员token>"
+```
+
+magpie 不可达时这些端点返回 `502` 与 `{"error": "magpie unavailable", "detail": ...}`；Magpie 标签页会显示行内错误横幅，Proxy 标签页不受影响。
+
 ### 架构
 
 ```
@@ -357,6 +402,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - AUDIT_RETENTION_DAYS=30
+      - MAGPIE_URL=http://127.0.0.1:3425  # magpie 网关地址（Magpie 标签页）
 
 volumes:
   openclaw-proxy-data:

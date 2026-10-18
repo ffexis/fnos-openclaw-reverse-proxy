@@ -34,13 +34,42 @@ body {
   letter-spacing: -0.01em;
 }
 
-.header { 
-  background: var(--bg-card); 
-  padding: 16px 32px; 
-  border-bottom: 1px solid var(--border-color); 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
+.header {
+  background: var(--bg-card);
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.header-main {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tabs { display: flex; gap: 4px; }
+.tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab:hover { color: var(--text-primary); background: var(--bg-input); }
+.tab.active {
+  color: var(--brand-color);
+  background: var(--primary-bg);
+  border-color: rgba(59, 130, 246, 0.35);
 }
 .header h1 { 
   font-size: 16px; 
@@ -260,15 +289,56 @@ td { transition: background 0.2s; }
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
 }
 .toast.show { opacity: 1; transform: translateY(0); }
+
+/* --- Magpie tab --- */
+.q-windows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px 28px;
+  margin-top: 12px;
+}
+#magpie-quotas > div:last-child { border-bottom: none; padding-bottom: 0; }
+.bar {
+  height: 6px;
+  background: var(--bg-main);
+  border-radius: 100px;
+  overflow: hidden;
+  margin-top: 6px;
+  border: 1px solid rgba(36, 47, 65, 0.5);
+}
+.bar-fill { height: 100%; background: var(--brand-color); border-radius: 100px; transition: width 0.3s; }
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 48px;
+  background: var(--bg-main);
+  border: 1px solid rgba(36, 47, 65, 0.5);
+  border-radius: 6px;
+  padding: 4px 6px 0;
+}
+.spark-bar {
+  flex: 1;
+  min-width: 2px;
+  background: var(--brand-color);
+  border-radius: 2px 2px 0 0;
+}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>Openclaw Proxy</h1>
+  <div class="header-main">
+    <h1>Openclaw Proxy</h1>
+    <nav class="tabs">
+      <button class="tab active" id="tab-proxy" type="button" onclick="switchTab('proxy')">Proxy</button>
+      <button class="tab" id="tab-magpie" type="button" onclick="switchTab('magpie')">Magpie</button>
+    </nav>
+  </div>
   <div class="status" id="status">Loading...</div>
 </div>
 
+<div id="view-proxy">
 <div class="container">
   <div style="display: flex; flex-direction: column; gap: 24px;">
     <div class="card">
@@ -328,6 +398,41 @@ td { transition: background 0.2s; }
       </thead>
       <tbody id="audit-body"></tbody>
     </table>
+  </div>
+</div>
+</div>
+
+<div id="view-magpie" style="display:none;">
+  <div class="container">
+    <div class="card full-width">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <h2 style="margin-bottom:0;">Magpie Quotas</h2>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span id="magpie-updated" style="font-size:12px; color:var(--text-muted);"></span>
+          <button class="btn btn-primary btn-sm" type="button" onclick="loadMagpie(true)">Refresh</button>
+        </div>
+      </div>
+      <div id="magpie-error" style="display:none; margin-top:16px; background:var(--danger-bg); border:1px solid rgba(239,68,68,0.3); color:var(--danger); padding:10px 14px; border-radius:8px; font-size:13px; word-break:break-all;"></div>
+      <div id="magpie-quotas" style="margin-top:8px;">Loading...</div>
+    </div>
+
+    <div class="card full-width">
+      <h2>Usage · Last 30 Days</h2>
+      <div id="magpie-usage">Loading...</div>
+    </div>
+
+    <div class="card full-width">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <h2 style="margin-bottom:0;">Recent Requests</h2>
+        <select id="magpie-limit" onchange="loadMagpie(true)"
+          style="font-size:12px; padding:5px 10px; background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; cursor:pointer; font-family:inherit;">
+          <option value="20">20</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="magpie-requests" style="margin-top:16px;">Loading...</div>
+    </div>
   </div>
 </div>
 
@@ -479,6 +584,199 @@ async function deleteAudit(name) {
   const data = await api('DELETE', '/api/audit/' + encodeURIComponent(name));
   toast('Deleted ' + data.files_removed + ' log files');
   loadAudit();
+}
+
+// --- Magpie tab ---
+
+let magpieLoaded = false;
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtInt(n) { return Number(n || 0).toLocaleString('en-US'); }
+function fmtCost(n) { return '$' + Number(n || 0).toFixed(4); }
+function fmtPct(n) { return (Math.round(n * 10) % 10 === 0 ? n.toFixed(0) : n.toFixed(1)) + '%'; }
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d) ? esc(iso) : d.toLocaleString();
+}
+function fmtReset(iso) {
+  if (!iso) return '';
+  const diff = new Date(iso) - Date.now();
+  if (isNaN(diff)) return '';
+  if (diff <= 0) return 'resetting now';
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return 'resets in ' + m + 'm';
+  const h = Math.floor(m / 60);
+  if (h < 48) return 'resets in ' + h + 'h';
+  return 'resets in ' + Math.floor(h / 24) + 'd';
+}
+
+function switchTab(view) {
+  document.getElementById('view-proxy').style.display = view === 'proxy' ? '' : 'none';
+  document.getElementById('view-magpie').style.display = view === 'magpie' ? '' : 'none';
+  document.getElementById('tab-proxy').classList.toggle('active', view === 'proxy');
+  document.getElementById('tab-magpie').classList.toggle('active', view === 'magpie');
+  if (view === 'magpie') loadMagpie();
+}
+
+async function magpieGet(path) {
+  const res = await fetch('/api/magpie/' + path, { headers: { 'Authorization': AUTH } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      data.error && data.detail ? data.error + ': ' + data.detail
+      : (data.error || data.detail || 'HTTP ' + res.status)
+    );
+  }
+  return data;
+}
+
+function magpieFail(msg) {
+  const el = document.getElementById('magpie-error');
+  el.textContent = 'magpie unavailable: ' + msg;
+  el.style.display = 'block';
+}
+
+function renderQuotas(d) {
+  const el = document.getElementById('magpie-quotas');
+  const items = (d && d.data) || [];
+  if (!items.length) { el.innerHTML = '<div class="empty">No quota data.</div>'; return; }
+  el.innerHTML = items.map(p => {
+    const windows = (p.windows || []).map(w => {
+      const used = Math.max(0, Math.min(100, Number(w.used) || 0));
+      const remaining = Math.max(0, Math.min(100, Number(w.remaining) || 0));
+      const color = remaining <= 10 ? 'var(--danger)' : remaining <= 30 ? '#f59e0b' : 'var(--brand-color)';
+      return `<div style="min-width:0;">
+        <div style="display:flex; justify-content:space-between; gap:8px; font-size:13px;">
+          <span style="color:var(--text-secondary);">${esc(w.name)}</span>
+          <span style="font-family:monospace; color:${color};">${fmtPct(remaining)} left</span>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${used}%; background:${color};"></div></div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-top:4px;">
+          <span>used ${fmtPct(used)}</span><span>${fmtReset(w.resetsAt)}</span>
+        </div>
+      </div>`;
+    }).join('');
+    const tags = [];
+    if (p.plan) tags.push(`<span style="font-size:11px; color:var(--text-secondary); background:var(--bg-input); border:1px solid var(--border-color); padding:2px 8px; border-radius:100px;">${esc(p.plan)}</span>`);
+    if (p.kind && p.kind !== 'plan') tags.push(`<span style="font-size:11px; color:var(--text-muted);">${esc(p.kind)}</span>`);
+    if (p.balance) tags.push(`<span style="font-family:monospace; font-size:13px; color:var(--success);">${esc(p.balance)}</span>`);
+    let body;
+    if (windows.length) {
+      body = `<div class="q-windows">${windows}</div>`;
+    } else if (p.balanceSplit && p.balanceSplit.length) {
+      body = `<div style="display:flex; gap:24px; flex-wrap:wrap; font-size:13px; margin-top:10px;">${
+        p.balanceSplit.map(b => `<span><span style="color:var(--text-secondary);">${esc(b.label)}</span> <span style="font-family:monospace;">${esc(b.text)}</span></span>`).join('')
+      }</div>`;
+    } else {
+      body = '<div style="font-size:13px; color:var(--text-muted); margin-top:8px;">No quota windows.</div>';
+    }
+    return `<div style="padding:16px 0; border-bottom:1px solid rgba(36,47,65,0.5);">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+        <span style="font-weight:600; font-size:14px;">${esc(p.name || p.provider)}</span>
+        <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">${tags.join('')}</span>
+      </div>
+      ${body}
+    </div>`;
+  }).join('');
+}
+
+function renderUsage(d) {
+  const el = document.getElementById('magpie-usage');
+  if (!d || d.calls === undefined) { el.innerHTML = '<div class="empty">No usage data.</div>'; return; }
+  const stats = [
+    ['Period', esc(d.period) + ' <span style="color:var(--text-muted); font-size:12px;">since ' + fmtTime(d.since) + '</span>'],
+    ['Calls', fmtInt(d.calls)],
+    ['Errors', fmtInt(d.errors)],
+    ['Input', fmtInt(d.input)],
+    ['Output', fmtInt(d.output)],
+    ['Cache Read', fmtInt(d.cache_read)],
+    ['Cache Write', fmtInt(d.cache_write)],
+    ['Reasoning', fmtInt(d.reasoning)],
+    ['Cost', fmtCost(d.cost)],
+    ['Unpriced', fmtInt(d.unpriced)],
+  ];
+  const series = d.series || [];
+  let spark = '';
+  if (series.length) {
+    const maxCalls = Math.max(1, ...series.map(s => s.calls || 0));
+    spark = `
+      <div style="margin-top:20px;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-secondary); margin-bottom:6px;">Daily calls</div>
+        <div class="sparkline">${series.map(s => {
+          const h = s.calls ? Math.max(4, Math.round((s.calls / maxCalls) * 100)) : 2;
+          const op = s.calls ? 0.85 : 0.15;
+          return `<div class="spark-bar" title="${esc(s.label)}: ${s.calls} calls, ${fmtCost(s.cost)}" style="height:${h}%; opacity:${op};"></div>`;
+        }).join('')}</div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-top:4px;">
+          <span>${esc(series[0].label)}</span><span>${esc(series[series.length - 1].label)}</span>
+        </div>
+      </div>`;
+  }
+  el.innerHTML = `<div class="info-grid" style="row-gap:12px;">${
+    stats.map(([k, v]) => `<span class="info-label">${k}</span><span class="info-value">${v}</span>`).join('')
+  }</div>${spark}`;
+}
+
+function renderRequests(d) {
+  const el = document.getElementById('magpie-requests');
+  const limit = Number(document.getElementById('magpie-limit').value) || 50;
+  const rows = ((d && d.rows) || []).slice(0, limit);
+  if (!rows.length) { el.innerHTML = '<div class="empty">No requests yet.</div>'; return; }
+  const th = 'padding:10px 8px; color:var(--text-secondary); text-align:left;';
+  const thr = th + ' text-align:right;';
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+    <table style="min-width:760px;">
+      <thead><tr style="border-bottom:2px solid var(--border-color);">
+        <th style="${th}">Time</th>
+        <th style="${th}">Provider</th>
+        <th style="${th}">Model</th>
+        <th style="${th}">Served</th>
+        <th style="${thr}">In</th>
+        <th style="${thr}">Out</th>
+        <th style="${thr}">ms</th>
+        <th style="${thr}">Status</th>
+        <th style="${thr}">Cost</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `
+        <tr style="border-bottom:1px solid rgba(36,47,65,0.4)">
+          <td style="padding:10px 8px; font-size:12px; color:var(--text-secondary); white-space:nowrap;">${fmtTime(r.t)}</td>
+          <td style="padding:10px 8px; font-size:13px; white-space:nowrap;">${esc(r.providerName || r.provider)}</td>
+          <td style="padding:10px 8px; font-size:13px; font-family:monospace;">${esc(r.model)}</td>
+          <td style="padding:10px 8px; font-size:13px; font-family:monospace; color:var(--text-secondary);">${esc(r.served)}</td>
+          <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${fmtInt(r.in)}</td>
+          <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${fmtInt(r.out)}</td>
+          <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${fmtInt(r.ms)}</td>
+          <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px; color:${r.status === 200 ? 'var(--success)' : 'var(--danger)'};">${esc(r.status)}</td>
+          <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${r.priced === false ? '—' : fmtCost(r.cost)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+async function loadMagpie(force) {
+  if (magpieLoaded && !force) return;
+  document.getElementById('magpie-error').style.display = 'none';
+  const limit = Number(document.getElementById('magpie-limit').value) || 50;
+  const [q, u, r] = await Promise.allSettled([
+    magpieGet('quotas'),
+    magpieGet('usage'),
+    magpieGet('usage/requests?limit=' + limit),
+  ]);
+  const rejected = [q, u, r].filter(x => x.status === 'rejected');
+  if (rejected.length) magpieFail(rejected[0].reason.message);
+  const placeholder = '<div class="empty">Unavailable.</div>';
+  if (q.status === 'fulfilled') renderQuotas(q.value);
+  else document.getElementById('magpie-quotas').innerHTML = placeholder;
+  if (u.status === 'fulfilled') renderUsage(u.value);
+  else document.getElementById('magpie-usage').innerHTML = placeholder;
+  if (r.status === 'fulfilled') renderRequests(r.value);
+  else document.getElementById('magpie-requests').innerHTML = placeholder;
+  magpieLoaded = rejected.length === 0;
+  document.getElementById('magpie-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
 
 if (!localStorage.getItem('proxy_token')) {

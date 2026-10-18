@@ -11,6 +11,9 @@ OPENCLAW_CONFIG_PATH = os.environ.get(
 )
 POLL_INTERVAL = int(os.environ.get("CONFIG_POLL_INTERVAL", "30"))
 
+# Magpie gateway base URL (usage/quota read-only API lives under /v1/magpie/*)
+MAGPIE_URL = os.environ.get("MAGPIE_URL", "http://127.0.0.1:3425").rstrip("/")
+
 
 class OpenclawConfig:
     """Reads and caches gateway config from openclaw.json, polls for changes."""
