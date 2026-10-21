@@ -33,7 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Openclaw Reverse Proxy", version="1.4.0")
+app = FastAPI(title="Openclaw Reverse Proxy", version="1.4.1")
 
 config = OpenclawConfig()
 store = TokenStore()

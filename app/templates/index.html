@@ -323,6 +323,38 @@ td { transition: background 0.2s; }
   background: var(--brand-color);
   border-radius: 2px 2px 0 0;
 }
+
+tr.row-has-err {
+  cursor: help;
+  border-bottom: 1px solid rgba(36, 47, 65, 0.4);
+}
+tr.row-has-err:hover td { background: rgba(239, 68, 68, 0.08); }
+
+.err-tip {
+  position: fixed;
+  z-index: 60;
+  display: none;
+  max-width: 380px;
+  background: #1e293b;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  pointer-events: none;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.err-tip-head {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--danger);
+  margin-bottom: 4px;
+}
 </style>
 </head>
 <body>
@@ -409,6 +441,10 @@ td { transition: background 0.2s; }
         <h2 style="margin-bottom:0;">Magpie Quotas</h2>
         <div style="display:flex; align-items:center; gap:12px;">
           <span id="magpie-updated" style="font-size:12px; color:var(--text-muted);"></span>
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary); cursor:pointer; user-select:none;">
+            <input type="checkbox" id="magpie-auto" onchange="setMagpieAuto(this.checked)" style="accent-color:var(--brand-color); cursor:pointer;">
+            Auto 60s
+          </label>
           <button class="btn btn-primary btn-sm" type="button" onclick="loadMagpie(true)">Refresh</button>
         </div>
       </div>
@@ -437,6 +473,7 @@ td { transition: background 0.2s; }
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="err-tip" id="err-tip"></div>
 
 <script>
 const AUTH = 'Bearer ' + (localStorage.getItem('proxy_token') || '');
@@ -588,7 +625,31 @@ async function deleteAudit(name) {
 
 // --- Magpie tab ---
 
-let magpieLoaded = false;
+const MAGPIE_REFRESH_MS = 60000;
+let magpieLastFetch = 0;
+let magpieLoading = false;
+let magpieTimer = null;
+
+function magpieAutoEnabled() {
+  return localStorage.getItem('magpie_autorefresh') !== '0';
+}
+
+function setMagpieAuto(enabled) {
+  localStorage.setItem('magpie_autorefresh', enabled ? '1' : '0');
+  document.getElementById('magpie-auto').checked = enabled;
+  scheduleMagpieAuto();
+}
+
+function scheduleMagpieAuto() {
+  if (magpieTimer) { clearInterval(magpieTimer); magpieTimer = null; }
+  if (!magpieAutoEnabled()) return;
+  magpieTimer = setInterval(() => {
+    // Skip when the Magpie tab is hidden or the browser tab is in background
+    if (document.getElementById('view-magpie').style.display === 'none') return;
+    if (document.hidden) return;
+    loadMagpie(true);
+  }, MAGPIE_REFRESH_MS);
+}
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -724,6 +785,7 @@ function renderRequests(d) {
   const el = document.getElementById('magpie-requests');
   const limit = Number(document.getElementById('magpie-limit').value) || 50;
   const rows = ((d && d.rows) || []).slice(0, limit);
+  hideErrTip();
   if (!rows.length) { el.innerHTML = '<div class="empty">No requests yet.</div>'; return; }
   const th = 'padding:10px 8px; color:var(--text-secondary); text-align:left;';
   const thr = th + ' text-align:right;';
@@ -741,8 +803,13 @@ function renderRequests(d) {
         <th style="${thr}">Status</th>
         <th style="${thr}">Cost</th>
       </tr></thead>
-      <tbody>${rows.map(r => `
-        <tr style="border-bottom:1px solid rgba(36,47,65,0.4)">
+      <tbody>${rows.map(r => {
+        const failed = Number(r.status) !== 200;
+        const rowAttrs = failed
+          ? ` class="row-has-err" data-status="${esc(r.status)}" data-errtype="${esc(r.err_type || '')}" data-tries="${esc(r.tries || 1)}" data-err="${esc(r.err || 'Unknown error')}"`
+          : ' style="border-bottom:1px solid rgba(36,47,65,0.4)"';
+        return `
+        <tr${rowAttrs}>
           <td style="padding:10px 8px; font-size:12px; color:var(--text-secondary); white-space:nowrap;">${fmtTime(r.t)}</td>
           <td style="padding:10px 8px; font-size:13px; white-space:nowrap;">${esc(r.providerName || r.provider)}</td>
           <td style="padding:10px 8px; font-size:13px; font-family:monospace;">${esc(r.model)}</td>
@@ -750,33 +817,74 @@ function renderRequests(d) {
           <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${fmtInt(r.in)}</td>
           <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${fmtInt(r.out)}</td>
           <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${fmtInt(r.ms)}</td>
-          <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px; color:${r.status === 200 ? 'var(--success)' : 'var(--danger)'};">${esc(r.status)}</td>
+          <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px; color:${failed ? 'var(--danger)' : 'var(--success)'};${failed ? ' border-bottom:1px dotted var(--danger);' : ''}">${esc(r.status)}</td>
           <td style="padding:10px 8px; text-align:right; font-family:monospace; font-size:12px;">${r.priced === false ? '—' : fmtCost(r.cost)}</td>
-        </tr>`).join('')}
+        </tr>`;
+      }).join('')}
       </tbody>
     </table></div>`;
 }
 
+function hideErrTip() {
+  document.getElementById('err-tip').style.display = 'none';
+}
+
+function showErrTip(row, x, y) {
+  const tip = document.getElementById('err-tip');
+  const type = row.dataset.errtype;
+  const tries = Number(row.dataset.tries || 1);
+  const meta = [type, tries > 1 ? tries + ' attempts' : ''].filter(Boolean).join(' · ');
+  tip.innerHTML = `<div class="err-tip-head">${esc(row.dataset.status)}${meta ? ' · ' + esc(meta) : ''}</div>`
+    + `<div>${esc(row.dataset.err)}</div>`;
+  tip.style.display = 'block';
+  const pad = 12;
+  const box = tip.getBoundingClientRect();
+  let left = x + 14;
+  let top = y + 14;
+  if (left + box.width > window.innerWidth - pad) left = x - box.width - 14;
+  if (top + box.height > window.innerHeight - pad) top = y - box.height - 14;
+  tip.style.left = Math.max(pad, left) + 'px';
+  tip.style.top = Math.max(pad, top) + 'px';
+}
+
+document.addEventListener('mouseover', e => {
+  const row = e.target.closest && e.target.closest('tr[data-err]');
+  if (!row || (e.relatedTarget && row.contains(e.relatedTarget))) return;
+  showErrTip(row, e.clientX, e.clientY);
+});
+document.addEventListener('mouseout', e => {
+  const row = e.target.closest && e.target.closest('tr[data-err]');
+  if (!row || (e.relatedTarget && row.contains(e.relatedTarget))) return;
+  hideErrTip();
+});
+document.addEventListener('scroll', hideErrTip, true);
+
 async function loadMagpie(force) {
-  if (magpieLoaded && !force) return;
+  if (magpieLoading) return;
+  if (!force && Date.now() - magpieLastFetch < MAGPIE_REFRESH_MS) return;
+  magpieLoading = true;
   document.getElementById('magpie-error').style.display = 'none';
   const limit = Number(document.getElementById('magpie-limit').value) || 50;
-  const [q, u, r] = await Promise.allSettled([
-    magpieGet('quotas'),
-    magpieGet('usage'),
-    magpieGet('usage/requests?limit=' + limit),
-  ]);
-  const rejected = [q, u, r].filter(x => x.status === 'rejected');
-  if (rejected.length) magpieFail(rejected[0].reason.message);
-  const placeholder = '<div class="empty">Unavailable.</div>';
-  if (q.status === 'fulfilled') renderQuotas(q.value);
-  else document.getElementById('magpie-quotas').innerHTML = placeholder;
-  if (u.status === 'fulfilled') renderUsage(u.value);
-  else document.getElementById('magpie-usage').innerHTML = placeholder;
-  if (r.status === 'fulfilled') renderRequests(r.value);
-  else document.getElementById('magpie-requests').innerHTML = placeholder;
-  magpieLoaded = rejected.length === 0;
-  document.getElementById('magpie-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  try {
+    const [q, u, r] = await Promise.allSettled([
+      magpieGet('quotas'),
+      magpieGet('usage'),
+      magpieGet('usage/requests?limit=' + limit),
+    ]);
+    const rejected = [q, u, r].filter(x => x.status === 'rejected');
+    if (rejected.length) magpieFail(rejected[0].reason.message);
+    const placeholder = '<div class="empty">Unavailable.</div>';
+    if (q.status === 'fulfilled') renderQuotas(q.value);
+    else document.getElementById('magpie-quotas').innerHTML = placeholder;
+    if (u.status === 'fulfilled') renderUsage(u.value);
+    else document.getElementById('magpie-usage').innerHTML = placeholder;
+    if (r.status === 'fulfilled') renderRequests(r.value);
+    else document.getElementById('magpie-requests').innerHTML = placeholder;
+    magpieLastFetch = Date.now();
+    document.getElementById('magpie-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } finally {
+    magpieLoading = false;
+  }
 }
 
 if (!localStorage.getItem('proxy_token')) {
@@ -790,6 +898,9 @@ loadTokens();
 loadAudit();
 setInterval(loadHealth, 30000);
 setInterval(loadAudit, 30000);
+
+document.getElementById('magpie-auto').checked = magpieAutoEnabled();
+scheduleMagpieAuto();
 </script>
 </body>
 </html>

@@ -31,7 +31,7 @@ OpenClaw's gateway is locked to loopback mode on certain NAS systems (e.g., FeiN
 - **Availability probe** - `GET /v1/__probe` endpoint for clients to detect proxy and gateway availability (no forwarding, no audit)
 - **Web UI** - Dark-themed management interface with audit stats
 - **Control UI reverse proxy** - Transparent HTTP + WebSocket reverse proxy for the OpenClaw web console, gated behind the proxy's admin token with single sign-on
-- **Magpie usage dashboard** - Header tabs (`Proxy | Magpie`); the Magpie tab shows the magpie gateway's quota windows, 30-day usage summary and recent request log, proxied read-only via `/api/magpie/*`
+- **Magpie usage dashboard** - Header tabs (`Proxy | Magpie`); the Magpie tab shows the magpie gateway's quota windows, 30-day usage summary and recent request log, proxied read-only via `/api/magpie/*`, with an optional 60s auto-refresh; failed requests reveal the upstream error message on hover
 
 ### OpenClaw Control UI Reverse Proxy
 

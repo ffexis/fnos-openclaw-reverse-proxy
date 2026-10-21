@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/):
 - **MINOR**: New features or backward-compatible behavioral changes
 - **PATCH**: Bug fixes
 
+## [1.4.1] - 2026-10-21
+
+### Added
+- Magpie auto-refresh every 60s — toggle ("Auto 60s", persisted in localStorage, on by default); skips ticks while the Magpie tab or browser tab is hidden
+- Hover tooltip on failed requests — non-200 rows show the status code in red with a dotted underline; hovering reveals `err_type`, retry count and the upstream `err` message (data already present in the `usage/requests` payload, no extra backend call)
+
 ## [1.4.0] - 2026-10-18
 
 ### Added
