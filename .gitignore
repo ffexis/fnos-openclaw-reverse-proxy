@@ -7,3 +7,8 @@ build/
 .env
 *.log
 .mimocode/
+
+# 私有 overlay（不进公开仓库，只保留空桩）
+private/*
+!private/__init__.py
+private/.git

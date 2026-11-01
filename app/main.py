@@ -27,13 +27,16 @@ from .proxy import proxy_request
 from .tokens import TokenStore
 from .ui_proxy import ui_proxy_request, ui_proxy_websocket
 
+# 可选的私有 overlay，公开仓库里是空桩（见 private/__init__.py）
+from private import register as register_private_modules
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Openclaw Reverse Proxy", version="1.4.1")
+app = FastAPI(title="Openclaw Reverse Proxy", version="1.5.0")
 
 config = OpenclawConfig()
 store = TokenStore()
@@ -116,7 +119,14 @@ async def index():
     from pathlib import Path
 
     html_path = Path(__file__).parent / "templates" / "index.html"
-    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    page = html_path.read_text(encoding="utf-8")
+    # 可选的私有 UI 注入点（公开仓库不含该文件）
+    fragment_path = Path(__file__).parents[1] / "private" / "index_inject.html"
+    if fragment_path.exists():
+        page = page.replace(
+            "</body>", fragment_path.read_text(encoding="utf-8") + "\n</body>"
+        )
+    return HTMLResponse(page)
 
 
 # --- Token Management ---
@@ -367,3 +377,19 @@ async def proxy_control_ui_ws(path: str, websocket: WebSocket):
         await websocket.close(code=1008, reason="proxy admin required")
         return
     await ui_proxy_websocket(websocket, config, "app/" + path)
+
+
+# --- 可选私有 overlay（必须放在所有核心路由之后，否则会被 /v1/{path} 等 catch-all 吞掉） ---
+
+_private_loaded = register_private_modules(
+    app,
+    {
+        "config": config,
+        "store": store,
+        "audit": audit,
+        "require_auth": require_auth,
+        "logger": logger,
+    },
+)
+if _private_loaded:
+    logger.info("Private overlay loaded: %s", ", ".join(_private_loaded))

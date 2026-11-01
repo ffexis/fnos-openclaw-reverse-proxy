@@ -1,0 +1,7 @@
+.git
+.mimocode
+.env
+__pycache__
+*.pyc
+*.log
+private/.git

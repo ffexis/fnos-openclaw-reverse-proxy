@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/):
 - **MINOR**: New features or backward-compatible behavioral changes
 - **PATCH**: Bug fixes
 
+## [1.5.0] - 2026-11-01
+
+### Added
+- Optional private overlay extension point — modules in the `private/` package are auto-discovered and loaded after all core routes, with the same `config` / `store` / `audit` / `require_auth` dependencies; the public repo ships a no-op `private/__init__.py` stub
+- Optional control-panel UI injection — `private/index_inject.html` is appended before `</body>` when present, so private UI fragments never touch the public template
+
+### Changed
+- Docker image now copies `private/` alongside `app/`
+- Added `.dockerignore` (excludes `.git`, `.mimocode`, `__pycache__`, `.env`, `private/.git`) to keep the build context lean
+
 ## [1.4.1] - 2026-10-21
 
 ### Added
